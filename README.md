@@ -299,6 +299,22 @@ npm link
 readme-bot analyze -r . -p 123 --format cli
 ```
 
+### Publishing GitHub Action Releases
+
+When ready to release a new version:
+
+```bash
+# Create and push a new tag
+git tag v1.1.0
+git push origin v1.1.0
+
+# Update major version tag (so users can use @v1)
+git tag -f v1
+git push origin v1 --force
+```
+
+**Important**: GitHub Actions users reference tags like `@v1`, `@v1.1.0`. Always update the major version tag when releasing.
+
 ## 🤝 Contributing
 
 1. Fork the repository
