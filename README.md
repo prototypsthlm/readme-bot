@@ -308,9 +308,22 @@ When ready to release a new version:
 git tag v1.1.0
 git push origin v1.1.0
 
-# Update major version tag (so users can use @v1)
+# Update major version tag (so users can use @v1) - Manual way
 git tag -f v1
 git push origin v1 --force
+
+# Or use the convenience script
+./update-tag.sh v1
+```
+
+**Quick tag updates**: Use the `update-tag.sh` script for faster tag updates:
+
+```bash
+# Update v1 tag to current commit
+./update-tag.sh
+
+# Update specific tag
+./update-tag.sh v1.2.0
 ```
 
 **Important**: GitHub Actions users reference tags like `@v1`, `@v1.1.0`. Always update the major version tag when releasing.
