@@ -76,40 +76,76 @@ program
 
         console.log(output);
 
-        // Post comment if requested
-        if (postComment || updateComment) {
-          const commentSpinner = ora('Posting comment to GitHub...').start();
-          
-          try {
-            const githubFormatter = SuggestionFormatter.create('github');
-            const commentBody = githubFormatter.format(analysis, {
-              repoName: `${owner}/${repoName}`,
-              prNumber: pr,
-              author: prData.author
-            });
+        // Auto-commit README updates by default, or post comment if requested
+        if (analysis.needsUpdate) {
+          if (postComment || updateComment) {
+            // Legacy comment mode
+            const commentSpinner = ora('Posting comment to GitHub...').start();
+            
+            try {
+              const githubFormatter = SuggestionFormatter.create('github');
+              const commentBody = githubFormatter.format(analysis, {
+                repoName: `${owner}/${repoName}`,
+                prNumber: pr,
+                author: prData.author
+              });
 
-            let comment;
-            if (updateComment) {
-              const existing = await github.findExistingComment(owner, repoName, parseInt(pr));
-              if (existing) {
-                comment = await github.updateComment(owner, repoName, existing.id, commentBody);
-                commentSpinner.succeed('Updated existing comment');
+              let comment;
+              if (updateComment) {
+                const existing = await github.findExistingComment(owner, repoName, parseInt(pr));
+                if (existing) {
+                  comment = await github.updateComment(owner, repoName, existing.id, commentBody);
+                  commentSpinner.succeed('Updated existing comment');
+                } else {
+                  comment = await github.createComment(owner, repoName, parseInt(pr), commentBody);
+                  commentSpinner.succeed('Posted new comment');
+                }
               } else {
                 comment = await github.createComment(owner, repoName, parseInt(pr), commentBody);
-                commentSpinner.succeed('Posted new comment');
+                commentSpinner.succeed('Posted comment');
               }
-            } else {
-              comment = await github.createComment(owner, repoName, parseInt(pr), commentBody);
-              commentSpinner.succeed('Posted comment');
-            }
 
-            if (verbose) {
-              console.log(chalk.gray(`Comment URL: ${comment.html_url}`));
+              if (verbose) {
+                console.log(chalk.gray(`Comment URL: ${comment.html_url}`));
+              }
+            } catch (error) {
+              commentSpinner.fail('Failed to post comment');
+              if (verbose) {
+                console.error(chalk.red(error.message));
+              }
             }
-          } catch (error) {
-            commentSpinner.fail('Failed to post comment');
-            if (verbose) {
-              console.error(chalk.red(error.message));
+          } else {
+            // Default: Auto-commit README updates
+            const commitSpinner = ora('Committing README updates to PR branch...').start();
+            
+            try {
+              const commitResult = await github.commitReadmeUpdates(
+                owner, 
+                repoName, 
+                parseInt(pr), 
+                analysis.suggestions, 
+                readme
+              );
+              
+              if (commitResult) {
+                commitSpinner.succeed(`Committed ${commitResult.suggestions} README updates`);
+                
+                if (verbose) {
+                  console.log(chalk.gray(`Commit URL: ${commitResult.url}`));
+                  console.log(chalk.blue(`💡 README changes are now in the PR for you to review!`));
+                }
+              } else {
+                commitSpinner.info('No README changes needed');
+              }
+            } catch (error) {
+              commitSpinner.fail('Failed to commit README updates');
+              if (verbose) {
+                console.error(chalk.red(error.message));
+              }
+              
+              // Fallback to showing suggestions
+              console.log(chalk.yellow('\n📝 Here are the suggested changes:'));
+              console.log(output);
             }
           }
         }
@@ -181,32 +217,63 @@ program
           author: prData.author
         });
 
-        // Post as comment
-        const config = getConfig();
+        // Auto-commit README updates by default
         if (analysis.needsUpdate) {
-          const commentSpinner = ora('Posting suggestions to PR...').start();
+          const commitSpinner = ora('Committing README updates to PR branch...').start();
           
           try {
-            let comment;
-            if (config.github.updateExistingComment) {
-              const existing = await github.findExistingComment(owner, repo, pullNumber);
-              if (existing) {
-                comment = await github.updateComment(owner, repo, existing.id, output);
+            const commitResult = await github.commitReadmeUpdates(
+              owner, 
+              repo, 
+              pullNumber, 
+              analysis.suggestions, 
+              readme
+            );
+            
+            if (commitResult) {
+              commitSpinner.succeed(`Committed ${commitResult.suggestions} README updates`);
+              
+              if (verbose) {
+                console.log(chalk.gray(`Commit URL: ${commitResult.url}`));
+                console.log(chalk.blue(`💡 README changes are now in the PR for review!`));
+              }
+            } else {
+              commitSpinner.info('No README changes needed');
+            }
+          } catch (error) {
+            commitSpinner.fail('Failed to commit README updates');
+            
+            if (verbose) {
+              console.error(chalk.red(error.message));
+            }
+            
+            // Fallback: post as comment instead
+            console.log(chalk.yellow('📝 Falling back to comment mode...'));
+            const config = getConfig();
+            const commentSpinner = ora('Posting suggestions as comment...').start();
+            
+            try {
+              let comment;
+              if (config.github.updateExistingComment) {
+                const existing = await github.findExistingComment(owner, repo, pullNumber);
+                if (existing) {
+                  comment = await github.updateComment(owner, repo, existing.id, output);
+                } else {
+                  comment = await github.createComment(owner, repo, pullNumber, output);
+                }
               } else {
                 comment = await github.createComment(owner, repo, pullNumber, output);
               }
-            } else {
-              comment = await github.createComment(owner, repo, pullNumber, output);
+              
+              commentSpinner.succeed('Posted README suggestions as comment');
+              
+              if (verbose) {
+                console.log(chalk.gray(`Comment URL: ${comment.html_url}`));
+              }
+            } catch (fallbackError) {
+              commentSpinner.fail('Failed to post comment fallback');
+              throw fallbackError;
             }
-            
-            commentSpinner.succeed('Posted README suggestions');
-            
-            if (verbose) {
-              console.log(chalk.gray(`Comment URL: ${comment.html_url}`));
-            }
-          } catch (error) {
-            commentSpinner.fail('Failed to post comment');
-            throw error;
           }
         } else {
           console.log(chalk.green('✅ README is up to date!'));
