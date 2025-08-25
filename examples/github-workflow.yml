@@ -1,0 +1,140 @@
+# Example GitHub Actions workflow for README Bot
+name: README Bot Analysis
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    # Optional: only run on specific branches
+    # branches: [main, develop]
+
+jobs:
+  readme-analysis:
+    runs-on: ubuntu-latest
+    
+    # Optional: skip for draft PRs or certain authors
+    if: github.event.pull_request.draft == false
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # Fetch full history for better analysis
+          fetch-depth: 0
+      
+      - name: Run README Bot
+        uses: ./  # Use local action, or replace with published version
+        id: readme-bot
+        with:
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          format: 'github'
+          post-comment: 'true'
+          update-existing: 'true'
+          verbose: 'false'
+      
+      # Optional: Additional actions based on results
+      - name: Label PR if README needs update
+        if: steps.readme-bot.outputs.needs-update == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ['documentation', 'readme-update-needed']
+            })
+      
+      - name: Remove label if README is up to date
+        if: steps.readme-bot.outputs.needs-update == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                name: 'readme-update-needed'
+              })
+            } catch (error) {
+              // Label might not exist, ignore error
+              console.log('Label removal failed:', error.message)
+            }
+      
+      # Optional: Send Slack notification for high-priority suggestions
+      - name: Notify team of high-priority suggestions
+        if: steps.readme-bot.outputs.needs-update == 'true' && steps.readme-bot.outputs.suggestion-count > 2
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          custom_payload: |
+            {
+              text: `:warning: README Bot found ${process.env.SUGGESTION_COUNT} documentation suggestions for PR #${process.env.PR_NUMBER}`,
+              attachments: [{
+                color: 'warning',
+                fields: [{
+                  title: 'Pull Request',
+                  value: `<${process.env.PR_URL}|#${process.env.PR_NUMBER}: ${process.env.PR_TITLE}>`,
+                  short: false
+                }, {
+                  title: 'Suggestions',
+                  value: `${process.env.SUGGESTION_COUNT} items need documentation updates`,
+                  short: true
+                }, {
+                  title: 'Comment',
+                  value: `<${process.env.COMMENT_URL}|View suggestions>`,
+                  short: true
+                }]
+              }]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SUGGESTION_COUNT: ${{ steps.readme-bot.outputs.suggestion-count }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          COMMENT_URL: ${{ steps.readme-bot.outputs.comment-url }}
+      
+      # Optional: Create issue for tracking README updates
+      - name: Create README update issue
+        if: steps.readme-bot.outputs.needs-update == 'true' && steps.readme-bot.outputs.suggestion-count >= 5
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: issue } = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `README updates needed (from PR #${context.issue.number})`,
+              body: `
+            ## README Updates Required
+            
+            README Bot has identified **${process.env.SUGGESTION_COUNT}** documentation updates needed from PR #${context.issue.number}.
+            
+            ### Original PR
+            - **Title:** ${context.payload.pull_request.title}
+            - **Author:** @${context.payload.pull_request.user.login}
+            - **URL:** ${context.payload.pull_request.html_url}
+            
+            ### Bot Analysis
+            - **Suggestions:** ${process.env.SUGGESTION_COUNT}
+            - **Analysis:** ${process.env.COMMENT_URL}
+            
+            Please review the suggestions and update the README accordingly.
+            
+            /cc @${context.payload.pull_request.user.login}
+            `,
+              labels: ['documentation', 'readme', 'enhancement'],
+              assignees: [context.payload.pull_request.user.login]
+            })
+            
+            // Link the issue to the PR
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `📋 Created issue #${issue.number} to track README updates from this PR.`
+            })
+        env:
+          SUGGESTION_COUNT: ${{ steps.readme-bot.outputs.suggestion-count }}
+          COMMENT_URL: ${{ steps.readme-bot.outputs.comment-url }}
