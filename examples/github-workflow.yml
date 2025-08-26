@@ -26,7 +26,6 @@ jobs:
         id: readme-bot
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           format: 'github'
           post-comment: 'true'
           update-existing: 'true'

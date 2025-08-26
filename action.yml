@@ -7,11 +7,6 @@ branding:
   color: 'blue'
 
 inputs:
-  github-token:
-    description: 'GitHub token for API access'
-    required: false
-    default: ${{ github.token }}
-  
   anthropic-api-key:
     description: 'Anthropic Claude API key'
     required: true
@@ -81,6 +76,8 @@ runs:
       shell: bash
       working-directory: ${{ github.action_path }}
       env:
-        GITHUB_TOKEN: ${{ inputs.github-token }}
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+        GITHUB_APP_ID: ${{ secrets.GITHUB_APP_ID }}
+        GITHUB_PRIVATE_KEY: ${{ secrets.GITHUB_PRIVATE_KEY }}
+        GITHUB_INSTALLATION_ID: ${{ secrets.GITHUB_INSTALLATION_ID }}
         README_BOT_CONFIG_PATH: ${{ inputs.config-path }}
