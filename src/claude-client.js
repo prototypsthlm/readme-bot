@@ -5,7 +5,7 @@ class ClaudeClient {
     this.client = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY,
     });
-    this.model = process.env.CLAUDE_MODEL || 'claude-3-5-sonnet-20241022';
+    this.model = process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514';
   }
 
   async analyzeChanges(prDiff, currentReadme, options = {}) {
