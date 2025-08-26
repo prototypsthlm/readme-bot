@@ -12,7 +12,7 @@ class GitHubClient {
     if (this.isGitHubAppConfigured()) {
       const auth = createAppAuth({
         appId: process.env.GH_APP_ID,
-        privateKey: process.env.GH_PRIVATE_KEY,
+        privateKey: this.decodePrivateKey(process.env.GH_PRIVATE_KEY_BASE64),
         clientId: process.env.GH_CLIENT_ID,
         clientSecret: process.env.GH_CLIENT_SECRET,
       });
@@ -32,8 +32,13 @@ class GitHubClient {
     }
   }
 
+  decodePrivateKey(base64Key) {
+    if (!base64Key) return null;
+    return Buffer.from(base64Key, 'base64').toString('utf8');
+  }
+
   isGitHubAppConfigured() {
-    return !!(process.env.GH_APP_ID && process.env.GH_PRIVATE_KEY && process.env.GH_CLIENT_ID && process.env.GH_CLIENT_SECRET);
+    return !!(process.env.GH_APP_ID && process.env.GH_PRIVATE_KEY_BASE64 && process.env.GH_CLIENT_ID && process.env.GH_CLIENT_SECRET);
   }
 
   async getPullRequestData(owner, repo, pullNumber) {
