@@ -1,24 +1,21 @@
 {
   "name": "readme-bot",
   "version": "1.0.0",
-  "description": "Command line tool that runs in a github action and makes suggestions to update the README.md file based on the changes in your pull request.",
+  "description": "GitHub App webhook server that automatically maintains README.md files based on pull request changes using Claude AI.",
   "main": "src/index.js",
-  "bin": {
-    "readme-bot": "./src/index.js"
-  },
   "scripts": {
     "start": "node src/index.js",
-    "test": "jest",
-    "lint": "eslint src/",
-    "format": "prettier --write src/"
+    "dev": "nodemon src/index.js",
+    "test": "jest"
   },
   "keywords": [
     "readme",
-    "github-action",
-    "cli",
+    "github-app",
+    "webhook",
     "documentation",
     "claude",
-    "ai"
+    "ai",
+    "automation"
   ],
   "author": "",
   "license": "MIT",
@@ -26,10 +23,8 @@
     "@anthropic-ai/sdk": "^0.27.0",
     "@octokit/auth-oauth-app": "^8.0.0",
     "@octokit/rest": "^20.0.2",
-    "chalk": "^4.1.2",
-    "commander": "^12.0.0",
     "dotenv": "^16.4.5",
-    "ora": "^5.4.1"
+    "express": "^5.1.0"
   },
   "devDependencies": {
     "eslint": "^8.57.0",
