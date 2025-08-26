@@ -31,33 +31,41 @@ function verifySignature(payload, signature) {
 app.post('/webhook', async (req, res) => {
   const signature = req.get('X-Hub-Signature-256');
   const event = req.get('X-GitHub-Event');
+  const delivery = req.get('X-GitHub-Delivery');
+  
+  console.log(`🔔 Webhook received: event=${event}, delivery=${delivery}`);
   
   // Verify webhook signature
   if (!verifySignature(req.body, signature)) {
-    console.log('Invalid webhook signature');
+    console.log('❌ Invalid webhook signature');
     return res.status(401).send('Invalid signature');
   }
   
   // Only handle pull request events
   if (event !== 'pull_request') {
+    console.log(`ℹ️ Ignoring event type: ${event}`);
     return res.status(200).send('Event ignored');
   }
   
   const payload = JSON.parse(req.body.toString());
   const { action, pull_request: pr, repository: repo } = payload;
   
+  console.log(`📝 PR event: ${repo.full_name}#${pr.number} - ${action}`);
+  
   // Only handle opened, synchronize, and reopened PR events
   if (!['opened', 'synchronize', 'reopened'].includes(action)) {
+    console.log(`ℹ️ Ignoring PR action: ${action}`);
     return res.status(200).send('PR action ignored');
   }
   
-  console.log(`Processing PR #${pr.number} in ${repo.full_name} (${action})`);
+  console.log(`🚀 Processing PR #${pr.number} in ${repo.full_name} (${action})`);
   
   try {
     await analyzePR(repo.owner.login, repo.name, pr.number);
+    console.log(`✅ Analysis complete for PR #${pr.number}`);
     res.status(200).send('Analysis complete');
   } catch (error) {
-    console.error(`Analysis failed for PR #${pr.number}:`, error.message);
+    console.error(`❌ Analysis failed for PR #${pr.number}:`, error.message);
     res.status(500).send('Analysis failed');
   }
 });
