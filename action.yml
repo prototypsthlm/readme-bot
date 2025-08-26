@@ -76,8 +76,8 @@ runs:
       shell: bash
       working-directory: ${{ github.action_path }}
       env:
+        GH_TOKEN: ${{ secrets.gh-token }}
+        GH_CLIENT_ID: ${{ secrets.gh-client-id }}
+        GH_CLIENT_SECRET: ${{ secrets.gh-client-secret }}
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
-        GITHUB_APP_ID: ${{ secrets.GITHUB_APP_ID }}
-        GITHUB_PRIVATE_KEY: ${{ secrets.GITHUB_PRIVATE_KEY }}
-        GITHUB_INSTALLATION_ID: ${{ secrets.GITHUB_INSTALLATION_ID }}
         README_BOT_CONFIG_PATH: ${{ inputs.config-path }}
