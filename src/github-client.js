@@ -8,28 +8,24 @@ class GitHubClient {
   }
 
   async init() {
-    // GitHub App authentication takes priority
-    if (this.isGitHubAppConfigured()) {
-      const auth = createAppAuth({
-        appId: process.env.GH_APP_ID,
-        privateKey: this.decodePrivateKey(process.env.GH_PRIVATE_KEY_BASE64),
-        clientId: process.env.GH_CLIENT_ID,
-        clientSecret: process.env.GH_CLIENT_SECRET,
-      });
-
-      const appAuthentication = await auth({
-        type: "oauth-app",
-      });
-
-      this.octokit = new Octokit({
-        auth: appAuthentication.token,
-      });
-    } else {
-      // Fall back to token authentication
-      this.octokit = new Octokit({
-        auth: process.env.GH_TOKEN,
-      });
+    if (!this.isGitHubAppConfigured()) {
+      throw new Error('GitHub App configuration is required. Set GH_APP_ID, GH_CLIENT_ID, GH_CLIENT_SECRET, and GH_PRIVATE_KEY_BASE64');
     }
+
+    const auth = createAppAuth({
+      appId: process.env.GH_APP_ID,
+      privateKey: this.decodePrivateKey(process.env.GH_PRIVATE_KEY_BASE64),
+      clientId: process.env.GH_CLIENT_ID,
+      clientSecret: process.env.GH_CLIENT_SECRET,
+    });
+
+    const appAuthentication = await auth({
+      type: "oauth-app",
+    });
+
+    this.octokit = new Octokit({
+      auth: appAuthentication.token,
+    });
   }
 
   decodePrivateKey(base64Key) {
