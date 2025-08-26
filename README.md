@@ -2,6 +2,8 @@
 
 GitHub App webhook server that automatically maintains README.md files by analyzing pull request changes with Claude AI.
 
+## I'm TESTING THINGS! 
+
 ## How it works
 
 1. **Install the GitHub App** on your repositories
