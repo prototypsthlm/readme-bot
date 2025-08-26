@@ -1,5 +1,3 @@
-const path = require('path');
-const fs = require('fs');
 
 let cachedConfig = null;
 
@@ -18,86 +16,29 @@ function loadConfig() {
     },
     github: {
       token: null,
-      // GitHub App settings
-      appId: null,
-      privateKey: null,
-      installationId: null,
-      commentMarker: '<!-- README-BOT -->',
-      createReview: false,
-      updateExistingComment: true
-    },
-    analysis: {
-      enableValidation: true,
-      skipFiles: [
-        'node_modules/**',
-        '.git/**',
-        '**/*.min.js',
-        '**/dist/**',
-        '**/build/**'
-      ],
-      priorityRules: {
-        env: 'high',
-        dependency: 'medium',
-        feature: 'medium',
-        setup: 'high',
-        api: 'high',
-        architecture: 'medium'
-      }
-    },
-    output: {
-      format: 'github',
-      groupBySeverity: true,
-      includeMetadata: true,
-      verbose: false
+      clientId: null,
+      clientSecret: null
     }
   };
 
-  // Try to load user config
-  const configPaths = [
-    path.join(process.cwd(), 'readme-bot.config.json'),
-    path.join(process.cwd(), '.readme-bot.json'),
-    path.join(process.cwd(), 'config', 'readme-bot.json'),
-    path.join(__dirname, '..', 'config', 'default.json')
-  ];
-
-  let userConfig = {};
-  
-  for (const configPath of configPaths) {
-    try {
-      if (fs.existsSync(configPath)) {
-        const configContent = fs.readFileSync(configPath, 'utf8');
-        userConfig = JSON.parse(configContent);
-        console.log(`Loaded config from: ${configPath}`);
-        break;
-      }
-    } catch (error) {
-      console.warn(`Warning: Failed to load config from ${configPath}:`, error.message);
-    }
-  }
-
-  // Merge configurations
-  cachedConfig = mergeDeep(defaultConfig, userConfig);
+  // Use default config (no file loading needed for webhook server)
+  cachedConfig = { ...defaultConfig };
   
   // Override with environment variables
   if (process.env.ANTHROPIC_API_KEY) {
     cachedConfig.claude.apiKey = process.env.ANTHROPIC_API_KEY;
   }
   
-  if (process.env.GITHUB_TOKEN) {
-    cachedConfig.github.token = process.env.GITHUB_TOKEN;
+  if (process.env.GH_TOKEN) {
+    cachedConfig.github.token = process.env.GH_TOKEN;
   }
   
-  // GitHub App environment variables
-  if (process.env.GITHUB_APP_ID) {
-    cachedConfig.github.appId = process.env.GITHUB_APP_ID;
+  if (process.env.GH_CLIENT_ID) {
+    cachedConfig.github.clientId = process.env.GH_CLIENT_ID;
   }
   
-  if (process.env.GITHUB_PRIVATE_KEY) {
-    cachedConfig.github.privateKey = process.env.GITHUB_PRIVATE_KEY;
-  }
-  
-  if (process.env.GITHUB_INSTALLATION_ID) {
-    cachedConfig.github.installationId = process.env.GITHUB_INSTALLATION_ID;
+  if (process.env.GH_CLIENT_SECRET) {
+    cachedConfig.github.clientSecret = process.env.GH_CLIENT_SECRET;
   }
   
   if (process.env.CLAUDE_MODEL) {
@@ -107,19 +48,6 @@ function loadConfig() {
   return cachedConfig;
 }
 
-function mergeDeep(target, source) {
-  const result = { ...target };
-  
-  for (const key in source) {
-    if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
-      result[key] = mergeDeep(target[key] || {}, source[key]);
-    } else {
-      result[key] = source[key];
-    }
-  }
-  
-  return result;
-}
 
 function getConfig() {
   return loadConfig();
@@ -135,43 +63,28 @@ function validateConfig(config = null) {
 
   // Validate required fields
   if (!cfg.claude.apiKey && !process.env.ANTHROPIC_API_KEY) {
-    errors.push('Claude API key is required (ANTHROPIC_API_KEY environment variable or config file)');
+    errors.push('Claude API key is required (ANTHROPIC_API_KEY environment variable)');
   }
 
-  // Check for either GitHub token or GitHub App credentials
-  const hasToken = cfg.github.token || process.env.GITHUB_TOKEN;
-  const hasAppId = cfg.github.appId || process.env.GITHUB_APP_ID;
-  const hasPrivateKey = cfg.github.privateKey || process.env.GITHUB_PRIVATE_KEY;
-  const hasInstallationId = cfg.github.installationId || process.env.GITHUB_INSTALLATION_ID;
+  // Check for either GitHub token or OAuth App credentials
+  const hasToken = cfg.github.token || process.env.GH_TOKEN;
+  const hasClientId = cfg.github.clientId || process.env.GH_CLIENT_ID;
+  const hasClientSecret = cfg.github.clientSecret || process.env.GH_CLIENT_SECRET;
   
-  const hasAppAuth = hasAppId && hasPrivateKey && hasInstallationId;
+  const hasOAuthAuth = hasClientId && hasClientSecret;
   
-  if (!hasToken && !hasAppAuth) {
-    errors.push('GitHub authentication is required. Either provide GITHUB_TOKEN or GitHub App credentials (GITHUB_APP_ID, GITHUB_PRIVATE_KEY, GITHUB_INSTALLATION_ID)');
+  if (!hasToken && !hasOAuthAuth) {
+    errors.push('GitHub authentication is required. Either provide GH_TOKEN or OAuth App credentials (GH_CLIENT_ID, GH_CLIENT_SECRET)');
   }
   
-  // If GitHub App credentials are partially provided, require all of them
-  if ((hasAppId || hasPrivateKey || hasInstallationId) && !hasAppAuth) {
-    errors.push('GitHub App authentication requires all three: GITHUB_APP_ID, GITHUB_PRIVATE_KEY, and GITHUB_INSTALLATION_ID');
+  // If OAuth App credentials are partially provided, require both
+  if ((hasClientId || hasClientSecret) && !hasOAuthAuth) {
+    errors.push('GitHub OAuth App authentication requires both: GH_CLIENT_ID and GH_CLIENT_SECRET');
   }
 
   // Validate model name
   if (cfg.claude.model && !cfg.claude.model.startsWith('claude-')) {
     errors.push(`Invalid Claude model name: ${cfg.claude.model}`);
-  }
-
-  // Validate priority rules
-  const validPriorities = ['high', 'medium', 'low'];
-  for (const [type, priority] of Object.entries(cfg.analysis.priorityRules)) {
-    if (!validPriorities.includes(priority)) {
-      errors.push(`Invalid priority '${priority}' for type '${type}'. Must be one of: ${validPriorities.join(', ')}`);
-    }
-  }
-
-  // Validate output format
-  const validFormats = ['github', 'cli', 'json'];
-  if (!validFormats.includes(cfg.output.format)) {
-    errors.push(`Invalid output format '${cfg.output.format}'. Must be one of: ${validFormats.join(', ')}`);
   }
 
   if (errors.length > 0) {
@@ -181,57 +94,8 @@ function validateConfig(config = null) {
   return true;
 }
 
-function createDefaultConfig() {
-  const configPath = path.join(process.cwd(), 'readme-bot.config.json');
-  
-  if (fs.existsSync(configPath)) {
-    throw new Error(`Configuration file already exists at: ${configPath}`);
-  }
-
-  const defaultConfig = {
-    claude: {
-      model: "claude-3-5-sonnet-20241022",
-      maxTokens: 4000,
-      temperature: 0.1
-    },
-    github: {
-      commentMarker: "<!-- README-BOT -->",
-      createReview: false,
-      updateExistingComment: true
-    },
-    analysis: {
-      enableValidation: true,
-      skipFiles: [
-        "node_modules/**",
-        ".git/**",
-        "**/*.min.js",
-        "**/dist/**",
-        "**/build/**"
-      ],
-      priorityRules: {
-        env: "high",
-        dependency: "medium", 
-        feature: "medium",
-        setup: "high",
-        api: "high",
-        architecture: "medium"
-      }
-    },
-    output: {
-      format: "github",
-      groupBySeverity: true,
-      includeMetadata: true,
-      verbose: false
-    }
-  };
-
-  fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2));
-  return configPath;
-}
-
 module.exports = {
   getConfig,
   resetConfig,
-  validateConfig,
-  createDefaultConfig
+  validateConfig
 };
