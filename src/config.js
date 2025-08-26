@@ -18,6 +18,10 @@ function loadConfig() {
     },
     github: {
       token: null,
+      // GitHub App settings
+      appId: null,
+      privateKey: null,
+      installationId: null,
       commentMarker: '<!-- README-BOT -->',
       createReview: false,
       updateExistingComment: true
@@ -83,6 +87,19 @@ function loadConfig() {
     cachedConfig.github.token = process.env.GITHUB_TOKEN;
   }
   
+  // GitHub App environment variables
+  if (process.env.GITHUB_APP_ID) {
+    cachedConfig.github.appId = process.env.GITHUB_APP_ID;
+  }
+  
+  if (process.env.GITHUB_PRIVATE_KEY) {
+    cachedConfig.github.privateKey = process.env.GITHUB_PRIVATE_KEY;
+  }
+  
+  if (process.env.GITHUB_INSTALLATION_ID) {
+    cachedConfig.github.installationId = process.env.GITHUB_INSTALLATION_ID;
+  }
+  
   if (process.env.CLAUDE_MODEL) {
     cachedConfig.claude.model = process.env.CLAUDE_MODEL;
   }
@@ -121,8 +138,21 @@ function validateConfig(config = null) {
     errors.push('Claude API key is required (ANTHROPIC_API_KEY environment variable or config file)');
   }
 
-  if (!cfg.github.token && !process.env.GITHUB_TOKEN) {
-    errors.push('GitHub token is required (GITHUB_TOKEN environment variable or config file)');
+  // Check for either GitHub token or GitHub App credentials
+  const hasToken = cfg.github.token || process.env.GITHUB_TOKEN;
+  const hasAppId = cfg.github.appId || process.env.GITHUB_APP_ID;
+  const hasPrivateKey = cfg.github.privateKey || process.env.GITHUB_PRIVATE_KEY;
+  const hasInstallationId = cfg.github.installationId || process.env.GITHUB_INSTALLATION_ID;
+  
+  const hasAppAuth = hasAppId && hasPrivateKey && hasInstallationId;
+  
+  if (!hasToken && !hasAppAuth) {
+    errors.push('GitHub authentication is required. Either provide GITHUB_TOKEN or GitHub App credentials (GITHUB_APP_ID, GITHUB_PRIVATE_KEY, GITHUB_INSTALLATION_ID)');
+  }
+  
+  // If GitHub App credentials are partially provided, require all of them
+  if ((hasAppId || hasPrivateKey || hasInstallationId) && !hasAppAuth) {
+    errors.push('GitHub App authentication requires all three: GITHUB_APP_ID, GITHUB_PRIVATE_KEY, and GITHUB_INSTALLATION_ID');
   }
 
   // Validate model name
