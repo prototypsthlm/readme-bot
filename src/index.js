@@ -4,7 +4,6 @@ const express = require('express');
 const crypto = require('crypto');
 const ClaudeClient = require('./claude-client');
 const GitHubClient = require('./github-client');
-const { getConfig, validateConfig } = require('./config');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -71,7 +70,10 @@ app.get('/health', (req, res) => {
 // Core analysis logic extracted from CLI
 async function analyzePR(owner, repo, pullNumber) {
   try {
-    await validateConfig();
+    // Basic validation
+    if (!process.env.ANTHROPIC_API_KEY) {
+      throw new Error('ANTHROPIC_API_KEY environment variable is required');
+    }
     
     const github = new GitHubClient();
     const claude = new ClaudeClient();

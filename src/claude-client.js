@@ -1,13 +1,11 @@
 const Anthropic = require('@anthropic-ai/sdk');
-const { getConfig } = require('./config');
 
 class ClaudeClient {
   constructor() {
-    const config = getConfig();
     this.client = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY || config.claude.apiKey,
+      apiKey: process.env.ANTHROPIC_API_KEY,
     });
-    this.model = config.claude.model || 'claude-4-sonnet-20250514';
+    this.model = process.env.CLAUDE_MODEL || 'claude-3-5-sonnet-20241022';
   }
 
   async analyzeChanges(prDiff, currentReadme, options = {}) {
