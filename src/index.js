@@ -84,16 +84,15 @@ async function analyzePR(owner, repo, pullNumber) {
     }
     
     const github = new GitHubClient();
+    await github.init();
     const claude = new ClaudeClient();
     
     console.log(`Fetching PR data for ${owner}/${repo}#${pullNumber}...`);
     
-    // Fetch PR data
-    const [prData, readme, diff] = await Promise.all([
-      github.getPullRequestData(owner, repo, pullNumber),
-      github.getCurrentReadme(owner, repo),
-      github.getDiffContent(owner, repo, pullNumber)
-    ]);
+    // Fetch PR data step by step
+    const prData = await github.getPullRequestData(owner, repo, pullNumber);
+    const readme = await github.getCurrentReadme(owner, repo);
+    const diff = await github.getDiffContent(owner, repo, pullNumber);
     
     console.log(`Analyzing changes with Claude...`);
     

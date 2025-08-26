@@ -1,17 +1,28 @@
 const { Octokit } = require('@octokit/rest');
-const { createOAuthAppAuth } = require('@octokit/auth-oauth-app');
+const { createAppAuth } = require('@octokit/auth-app');
 
 class GitHubClient {
   constructor() {
-    // OAuth App authentication takes priority
-    if (this.isOAuthAppConfigured()) {
+    // Will be initialized in init()
+    this.octokit = null;
+  }
+
+  async init() {
+    // GitHub App authentication takes priority
+    if (this.isGitHubAppConfigured()) {
+      const auth = createAppAuth({
+        appId: process.env.GH_APP_ID,
+        privateKey: process.env.GH_PRIVATE_KEY,
+        clientId: process.env.GH_CLIENT_ID,
+        clientSecret: process.env.GH_CLIENT_SECRET,
+      });
+
+      const appAuthentication = await auth({
+        type: "oauth-app",
+      });
+
       this.octokit = new Octokit({
-        authStrategy: createOAuthAppAuth,
-        auth: {
-          clientType: 'oauth-app',
-          clientId: process.env.GH_CLIENT_ID,
-          clientSecret: process.env.GH_CLIENT_SECRET,
-        },
+        auth: appAuthentication.token,
       });
     } else {
       // Fall back to token authentication
@@ -21,8 +32,8 @@ class GitHubClient {
     }
   }
 
-  isOAuthAppConfigured() {
-    return !!(process.env.GH_CLIENT_ID && process.env.GH_CLIENT_SECRET);
+  isGitHubAppConfigured() {
+    return !!(process.env.GH_APP_ID && process.env.GH_PRIVATE_KEY && process.env.GH_CLIENT_ID && process.env.GH_CLIENT_SECRET);
   }
 
   async getPullRequestData(owner, repo, pullNumber) {
