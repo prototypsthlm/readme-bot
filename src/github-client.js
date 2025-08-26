@@ -20,7 +20,7 @@ class GitHubClient {
     });
 
     const appAuthentication = await auth({
-      type: "oauth-app",
+      type: "app",
     });
 
     this.octokit = new Octokit({
