@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import crypto from 'crypto';
-import ClaudeClient from './claude-client';
-import GitHubClient from './github-client';
+import ClaudeClient from './claude-client.js';
+import GitHubClient from './github-client.js';
 
 interface GitHubWebhookPayload {
   action: string;
