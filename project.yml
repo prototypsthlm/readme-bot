@@ -1,0 +1,14 @@
+environment:
+  ANTHROPIC_API_KEY: $ANTHROPIC_API_KEY
+  GITHUB_APP_ID: $GITHUB_APP_ID
+  GITHUB_PRIVATE_KEY: $GITHUB_PRIVATE_KEY
+  WEBHOOK_SECRET: $WEBHOOK_SECRET
+
+packages:
+  - name: readme-bot
+    functions:
+      - name: webhook
+        runtime: nodejs:18
+        main: index.ts
+        web: true
+        # buildCommand: npm run build

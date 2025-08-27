@@ -10,7 +10,9 @@
     "dev": "tsx src/index.ts",
     "dev:watch": "nodemon --exec ts-node src/index.ts",
     "test": "jest",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "deploy": "doctl serverless deploy .",
+    "functions:invoke": "doctl serverless functions invoke readme-bot/webhook"
   },
   "keywords": [
     "readme",
@@ -27,8 +29,7 @@
     "@anthropic-ai/sdk": "^0.27.0",
     "@octokit/auth-app": "^8.0.2",
     "@octokit/rest": "^20.0.2",
-    "dotenv": "^16.4.5",
-    "express": "^5.1.0"
+    "dotenv": "^16.4.5"
   },
   "devDependencies": {
     "@types/crypto-js": "^4.2.2",
