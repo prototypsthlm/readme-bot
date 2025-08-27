@@ -89,7 +89,6 @@ async function analyzePR(owner, repo, pullNumber, installationId) {
     }
     
     const github = new GitHubClient();
-    await github.init();
     const claude = new ClaudeClient();
     
     console.log(`Fetching PR data for ${owner}/${repo}#${pullNumber}...`);

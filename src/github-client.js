@@ -3,13 +3,10 @@ const { createAppAuth } = require('@octokit/auth-app');
 
 class GitHubClient {
   constructor() {
-    this.installationClients = new Map(); // Cache Octokit clients by installationId
-  }
-
-  async init() {
     if (!this.isGitHubAppConfigured()) {
       throw new Error('GitHub App configuration is required. Set GH_APP_ID, GH_CLIENT_ID, GH_CLIENT_SECRET, and GH_PRIVATE_KEY_BASE64');
     }
+    this.installationClients = new Map(); // Cache Octokit clients by installationId
   }
 
   async getInstallationOctokit(installationId) {
