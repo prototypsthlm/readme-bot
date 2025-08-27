@@ -12,19 +12,14 @@ class GitHubClient {
       throw new Error('GitHub App configuration is required. Set GH_APP_ID, GH_CLIENT_ID, GH_CLIENT_SECRET, and GH_PRIVATE_KEY_BASE64');
     }
 
-    const auth = createAppAuth({
-      appId: process.env.GH_APP_ID,
-      privateKey: this.decodePrivateKey(process.env.GH_PRIVATE_KEY_BASE64),
-      clientId: process.env.GH_CLIENT_ID,
-      clientSecret: process.env.GH_CLIENT_SECRET,
-    });
-
-    const appAuthentication = await auth({
-      type: "app",
-    });
-
     this.octokit = new Octokit({
-      auth: appAuthentication.token,
+      authStrategy: createAppAuth,
+      auth: {
+        clientId: process.env.GH_CLIENT_ID,
+        clientSecret: process.env.GH_CLIENT_SECRET,
+        appId: process.env.GH_APP_ID,
+        privateKey: this.decodePrivateKey(process.env.GH_PRIVATE_KEY_BASE64),
+      }
     });
   }
 
