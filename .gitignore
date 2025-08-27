@@ -74,3 +74,6 @@ config/local.json
 tmp/
 temp/
 *.tmp
+
+.deployed
+packages/readme-bot/webhook/__deployer__.zip
