@@ -1,62 +1,14 @@
 import { Octokit } from "@octokit/rest";
 import { createAppAuth } from "@octokit/auth-app";
-import type { RestEndpointMethodTypes } from "@octokit/rest";
-
-type IssueComment =
-  RestEndpointMethodTypes["issues"]["createComment"]["response"]["data"];
-type Review =
-  RestEndpointMethodTypes["pulls"]["createReview"]["response"]["data"];
-
-interface Suggestion {
-  type: string;
-  section: string;
-  description: string;
-  priority: string;
-  content: string;
-}
-
-interface CommitResult {
-  commit: any;
-  content: any;
-  suggestions: number;
-  url: string;
-}
-
-interface RepositoryInfo {
-  owner: string;
-  repo: string;
-}
-
-interface GitHubEnvironment {
-  owner: string;
-  repo: string;
-  pullNumber: number;
-  event: any;
-}
-
-interface ProcessedPullRequestData {
-  title: string;
-  body: string;
-  number: number;
-  state: string;
-  baseBranch: string;
-  headBranch: string;
-  author: string;
-  files: Array<{
-    filename: string;
-    status: string;
-    additions: number;
-    deletions: number;
-    patch: string | undefined;
-    sha: string;
-  }>;
-  commits: Array<{
-    sha: string;
-    message: string;
-    author: string;
-  }>;
-  changedFiles: string[];
-}
+import type {
+  Suggestion,
+  IssueComment,
+  Review,
+  CommitResult,
+  RepositoryInfo,
+  GitHubEnvironment,
+  ProcessedPullRequestData,
+} from "./types";
 
 class GitHubClient {
   private octokit: Octokit | null = null;

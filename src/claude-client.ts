@@ -1,25 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-
-interface AnalysisOptions {
-  repoName?: string;
-  prTitle?: string;
-  prDescription?: string;
-  changedFiles?: string[];
-}
-
-interface Suggestion {
-  type: string;
-  section: string;
-  description: string;
-  priority: string;
-  content: string;
-}
-
-interface AnalysisResult {
-  needsUpdate: boolean;
-  suggestions: Suggestion[];
-  error?: string;
-}
+import type { Suggestion, AnalysisOptions, AnalysisResult } from './types';
 
 class ClaudeClient {
   private client: Anthropic;
