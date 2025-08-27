@@ -24,9 +24,6 @@
     "noPropertyAccessFromIndexSignature": true,
     "noUncheckedIndexedAccess": true
   },
-  "ts-node": {
-    "esm": true
-  },
   "include": [
     "src/**/*"
   ],
