@@ -14,8 +14,6 @@ class GitHubClient {
       const octokit = new Octokit({
         authStrategy: createAppAuth,
         auth: {
-          clientId: process.env.GH_CLIENT_ID,
-          clientSecret: process.env.GH_CLIENT_SECRET,
           appId: process.env.GH_APP_ID,
           privateKey: this.decodePrivateKey(process.env.GH_PRIVATE_KEY_BASE64),
           installationId: installationId,
