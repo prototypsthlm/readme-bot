@@ -9,6 +9,4 @@ packages:
     functions:
       - name: webhook
         runtime: nodejs:18
-        main: ""
         web: true
-        
