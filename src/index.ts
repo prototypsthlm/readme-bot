@@ -39,6 +39,9 @@ interface GitHubWebhookPayload {
     owner: {
       login: string;
     };
+  },
+  installation: {
+    id: string;
   };
 }
 
@@ -65,8 +68,8 @@ app.post('/webhook', async (req: Request, res: Response): Promise<void> => {
   }
   
   const payload: GitHubWebhookPayload = JSON.parse(req.body.toString());
-  const { action, pull_request: pr, repository: repo } = payload;
-  
+  const { action, pull_request: pr, repository: repo, installation } = payload;
+
   console.log(`📝 PR event: ${repo.full_name}#${pr.number} - ${action}`);
   
   // Only handle opened, synchronize, and reopened PR events
@@ -76,10 +79,10 @@ app.post('/webhook', async (req: Request, res: Response): Promise<void> => {
     return;
   }
   
-  console.log(`🚀 Processing PR #${pr.number} in ${repo.full_name} (${action})`);
+  console.log(`🚀 Processing PR #${pr.number} in ${repo.full_name} (${action}) for installation ${installation.id}`);
   
   try {
-    await analyzePR(repo.owner.login, repo.name, pr.number);
+    await analyzePR(repo.owner.login, repo.name, pr.number, installation.id);
     console.log(`✅ Analysis complete for PR #${pr.number}`);
     res.status(200).send('Analysis complete');
   } catch (error) {
@@ -94,7 +97,7 @@ app.get('/health', (_req: Request, res: Response) => {
 });
 
 // Core analysis logic extracted from CLI
-async function analyzePR(owner: string, repo: string, pullNumber: number): Promise<void> {
+async function analyzePR(owner: string, repo: string, pullNumber: number, installationId: string): Promise<void> {
   try {
     // Basic validation
     if (!process.env['ANTHROPIC_API_KEY']) {
@@ -102,15 +105,14 @@ async function analyzePR(owner: string, repo: string, pullNumber: number): Promi
     }
     
     const github = new GitHubClient();
-    await github.init();
     const claude = new ClaudeClient();
     
     console.log(`Fetching PR data for ${owner}/${repo}#${pullNumber}...`);
     
     // Fetch PR data step by step
-    const prData = await github.getPullRequestData(owner, repo, pullNumber);
-    const readme = await github.getCurrentReadme(owner, repo);
-    const diff = await github.getDiffContent(owner, repo, pullNumber);
+    const prData = await github.getPullRequestData(owner, repo, pullNumber, installationId);
+    const readme = await github.getCurrentReadme(owner, repo, installationId);
+    const diff = await github.getDiffContent(owner, repo, pullNumber, installationId);
     
     console.log(`Analyzing changes with Claude...`);
     
@@ -136,7 +138,8 @@ async function analyzePR(owner: string, repo: string, pullNumber: number): Promi
         repo, 
         pullNumber, 
         analysis.suggestions, 
-        readme
+        readme,
+        installationId
       );
       
       if (commitResult) {
