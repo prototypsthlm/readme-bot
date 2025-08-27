@@ -1,19 +1,18 @@
-require('dotenv').config();
-
-const express = require('express');
-const crypto = require('crypto');
-const ClaudeClient = require('./claude-client');
-const GitHubClient = require('./github-client');
+import 'dotenv/config';
+import express, { Request, Response } from 'express';
+import crypto from 'crypto';
+import ClaudeClient from './claude-client';
+import GitHubClient from './github-client';
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env['PORT'] || 3000;
 
 // Middleware to parse JSON and verify GitHub webhook signature
 app.use('/webhook', express.raw({ type: 'application/json' }));
 
 // Webhook signature verification
-function verifySignature(payload, signature) {
-  const webhookSecret = process.env.WEBHOOK_SECRET;
+function verifySignature(payload: Buffer, signature: string | undefined): boolean {
+  const webhookSecret = process.env['WEBHOOK_SECRET'];
   if (!webhookSecret) return true; // Skip verification if no secret set
   
   const expectedSignature = crypto
@@ -27,8 +26,24 @@ function verifySignature(payload, signature) {
   );
 }
 
+interface GitHubWebhookPayload {
+  action: string;
+  pull_request: {
+    number: number;
+    title: string;
+    body: string | null;
+  };
+  repository: {
+    full_name: string;
+    name: string;
+    owner: {
+      login: string;
+    };
+  };
+}
+
 // Main webhook handler
-app.post('/webhook', async (req, res) => {
+app.post('/webhook', async (req: Request, res: Response): Promise<void> => {
   const signature = req.get('X-Hub-Signature-256');
   const event = req.get('X-GitHub-Event');
   const delivery = req.get('X-GitHub-Delivery');
@@ -38,16 +53,18 @@ app.post('/webhook', async (req, res) => {
   // Verify webhook signature
   if (!verifySignature(req.body, signature)) {
     console.log('❌ Invalid webhook signature');
-    return res.status(401).send('Invalid signature');
+    res.status(401).send('Invalid signature');
+    return;
   }
   
   // Only handle pull request events
   if (event !== 'pull_request') {
     console.log(`ℹ️ Ignoring event type: ${event}`);
-    return res.status(200).send('Event ignored');
+    res.status(200).send('Event ignored');
+    return;
   }
   
-  const payload = JSON.parse(req.body.toString());
+  const payload: GitHubWebhookPayload = JSON.parse(req.body.toString());
   const { action, pull_request: pr, repository: repo } = payload;
   
   console.log(`📝 PR event: ${repo.full_name}#${pr.number} - ${action}`);
@@ -55,7 +72,8 @@ app.post('/webhook', async (req, res) => {
   // Only handle opened, synchronize, and reopened PR events
   if (!['opened', 'synchronize', 'reopened'].includes(action)) {
     console.log(`ℹ️ Ignoring PR action: ${action}`);
-    return res.status(200).send('PR action ignored');
+    res.status(200).send('PR action ignored');
+    return;
   }
   
   console.log(`🚀 Processing PR #${pr.number} in ${repo.full_name} (${action})`);
@@ -65,21 +83,21 @@ app.post('/webhook', async (req, res) => {
     console.log(`✅ Analysis complete for PR #${pr.number}`);
     res.status(200).send('Analysis complete');
   } catch (error) {
-    console.error(`❌ Analysis failed for PR #${pr.number}:`, error.message);
+    console.error(`❌ Analysis failed for PR #${pr.number}:`, (error as Error).message);
     res.status(500).send('Analysis failed');
   }
 });
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
 // Core analysis logic extracted from CLI
-async function analyzePR(owner, repo, pullNumber) {
+async function analyzePR(owner: string, repo: string, pullNumber: number): Promise<void> {
   try {
     // Basic validation
-    if (!process.env.ANTHROPIC_API_KEY) {
+    if (!process.env['ANTHROPIC_API_KEY']) {
       throw new Error('ANTHROPIC_API_KEY environment variable is required');
     }
     
@@ -128,12 +146,12 @@ async function analyzePR(owner, repo, pullNumber) {
         console.log(`ℹ️ No README changes needed for PR #${pullNumber}`);
       }
     } catch (commitError) {
-      console.error(`Failed to commit README updates: ${commitError.message}`);
+      console.error(`Failed to commit README updates: ${(commitError as Error).message}`);
       console.log(`📝 Suggestions were: ${JSON.stringify(analysis.suggestions, null, 2)}`);
     }
     
   } catch (error) {
-    console.error(`Analysis failed: ${error.message}`);
+    console.error(`Analysis failed: ${(error as Error).message}`);
     throw error;
   }
 }
