@@ -25,12 +25,10 @@ class GitHubClient {
     }
 
     const auth = createAppAuth({
-      appId: process.env["GH_APP_ID"] as string,
-      privateKey: this.decodePrivateKey(
-        process.env["GH_PRIVATE_KEY_BASE64"]
-      ) as string,
-      clientId: process.env["GH_CLIENT_ID"] as string,
-      clientSecret: process.env["GH_CLIENT_SECRET"] as string,
+      appId: process.env["GH_APP_ID"]!,
+      privateKey: this.decodePrivateKey(process.env["GH_PRIVATE_KEY_BASE64"]!),
+      clientId: process.env["GH_CLIENT_ID"]!,
+      clientSecret: process.env["GH_CLIENT_SECRET"]!,
     });
 
     const appAuthentication = await auth({
@@ -42,8 +40,7 @@ class GitHubClient {
     });
   }
 
-  private decodePrivateKey(base64Key: string | undefined): string | null {
-    if (!base64Key) return null;
+  private decodePrivateKey(base64Key: string): string {
     return Buffer.from(base64Key, "base64").toString("utf8");
   }
 
