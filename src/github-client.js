@@ -3,7 +3,7 @@ const { createAppAuth } = require('@octokit/auth-app');
 
 class GitHubClient {
   constructor() {
-    this.installationAuths = new Map(); // Cache installation auths by installationId
+    this.installationClients = new Map(); // Cache Octokit clients by installationId
   }
 
   async init() {
@@ -13,7 +13,7 @@ class GitHubClient {
   }
 
   async getInstallationOctokit(installationId) {
-    if (!this.installationAuths.has(installationId)) {
+    if (!this.installationClients.has(installationId)) {
       const octokit = new Octokit({
         authStrategy: createAppAuth,
         auth: {
@@ -25,10 +25,10 @@ class GitHubClient {
         }
       });
 
-      this.installationAuths.set(installationId, octokit);
+      this.installationClients.set(installationId, octokit);
     }
 
-    return this.installationAuths.get(installationId);
+    return this.installationClients.get(installationId);
   }
 
   decodePrivateKey(base64Key) {
