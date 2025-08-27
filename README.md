@@ -21,34 +21,32 @@ GitHub App webhook server that automatically maintains README.md files by analyz
    - **Pull requests**: Read (to analyze PRs)
 5. Subscribe to **Pull request** events
 
-### 2. Deploy Server
+### 2. Deploy to Digital Ocean Functions
 
 ```bash
-# Clone and install
+# Clone and setup
 git clone https://github.com/your-username/readme-bot
 cd readme-bot
-npm install
 
-# Set environment variables
-cp .env.example .env
-# Edit .env with your credentials
+# Set environment variables in Digital Ocean Functions
+# Configure in project.yml or Digital Ocean dashboard
 
-# Start server
-npm start
+# Deploy function
+doctl serverless deploy .
 ```
 
 ### 3. Environment Variables
 
+Configure these in your Digital Ocean Functions environment:
+
 ```bash
 # Required
 ANTHROPIC_API_KEY=sk-ant-your-claude-api-key
-GH_CLIENT_ID=your-github-app-client-id
-GH_CLIENT_SECRET=your-github-app-client-secret
+GITHUB_APP_ID=your-github-app-id
+GITHUB_PRIVATE_KEY=your-github-app-private-key
 
 # Optional  
 WEBHOOK_SECRET=your-webhook-secret
-PORT=3000
-CLAUDE_MODEL=claude-3-5-sonnet-20241022
 ```
 
 ## What it detects
@@ -62,15 +60,27 @@ CLAUDE_MODEL=claude-3-5-sonnet-20241022
 ## Development
 
 ```bash
+# Install dependencies in function directory
+cd packages/readme-bot/webhook
 npm install
-npm start
-# Server runs on http://localhost:3000
+
+# Build TypeScript
+npm run build
+
+# Deploy to Digital Ocean Functions
+cd ../../../
+doctl serverless deploy .
 ```
 
-**Endpoints:**
-- `POST /webhook` - GitHub webhook handler
-- `GET /health` - Health check
+## Deployment Commands
 
-## License
+```bash
+# Deploy function
+doctl serverless deploy .
 
-MIT
+# Get function URL
+doctl sls fn get readme-bot/webhook --url
+
+# Invoke function for testing
+doctl serverless functions invoke readme-bot/webhook
+```

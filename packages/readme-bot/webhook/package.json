@@ -1,18 +1,12 @@
 {
   "name": "readme-bot",
-  "version": "1.0.0",
+  "version": "1.0.",
   "description": "GitHub App webhook server that automatically maintains README.md files based on pull request changes using Claude AI.",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "tsx src/index.ts",
-    "dev:watch": "nodemon --exec ts-node src/index.ts",
-    "test": "jest",
-    "type-check": "tsc --noEmit",
-    "deploy": "doctl serverless deploy .",
-    "functions:invoke": "doctl serverless functions invoke readme-bot/webhook"
+    "type-check": "tsc --noEmit"
   },
   "keywords": [
     "readme",
