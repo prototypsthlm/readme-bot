@@ -11,31 +11,25 @@ import type {
 } from "./types";
 
 class GitHubClient {
-  private installationClients: Map<string, Octokit> = new Map();
+  private octokit: Octokit;
 
-  constructor() {
+  constructor(installationId: string) {
     if (!this.isGitHubAppConfigured()) {
       throw new Error('GitHub App configuration is required. Set GH_APP_ID, GH_CLIENT_ID, GH_CLIENT_SECRET, and GH_PRIVATE_KEY_BASE64');
     }
-
-    this.installationClients = new Map(); // Cache Octokit clients by installationId
-  }
-
-  async getInstallationOctokit(installationId: string): Promise<Octokit | undefined> {
-    if (!this.installationClients.has(installationId)) {
-      const octokit = new Octokit({
-        authStrategy: createAppAuth,
-        auth: {
-          appId: process.env["GH_APP_ID"]!,
-          privateKey: this.decodePrivateKey(process.env["GH_PRIVATE_KEY_BASE64"]!),
-          installationId: installationId,
-        }
-      });
-
-      this.installationClients.set(installationId, octokit);
+    
+    if (!installationId) {
+      throw new Error('installationId is required');
     }
 
-    return this.installationClients.get(installationId);
+    this.octokit = new Octokit({
+      authStrategy: createAppAuth,
+      auth: {
+        appId: process.env["GH_APP_ID"]!,
+        privateKey: this.decodePrivateKey(process.env["GH_PRIVATE_KEY_BASE64"]!),
+        installationId: installationId,
+      }
+    });
   }
 
   private decodePrivateKey(base64Key: string): string {
@@ -52,19 +46,13 @@ class GitHubClient {
   async getPullRequestData(
     owner: string,
     repo: string,
-    pullNumber: number,
-    installationId: string
+    pullNumber: number
   ): Promise<ProcessedPullRequestData> {
-    const octokit = await this.getInstallationOctokit(installationId);
-    if (!octokit) {
-      throw new Error(`Failed to get Octokit client for installation ${installationId}`);
-    }
-
     try {
       const [prResponse, filesResponse, commitsResponse] = await Promise.all([
-        octokit.pulls.get({ owner, repo, pull_number: pullNumber }),
-        octokit.pulls.listFiles({ owner, repo, pull_number: pullNumber }),
-        octokit.pulls.listCommits({
+        this.octokit.pulls.get({ owner, repo, pull_number: pullNumber }),
+        this.octokit.pulls.listFiles({ owner, repo, pull_number: pullNumber }),
+        this.octokit.pulls.listCommits({
           owner,
           repo,
           pull_number: pullNumber,
@@ -106,16 +94,10 @@ class GitHubClient {
   async getCurrentReadme(
     owner: string,
     repo: string,
-    installationId: string,
     ref: string = "main",
   ): Promise<string> {
-    const octokit = await this.getInstallationOctokit(installationId);
-    if (!octokit) {
-      throw new Error(`Failed to get Octokit client for installation ${installationId}`);
-    }
-
     try {
-      const response = await octokit.repos.getContent({
+      const response = await this.octokit.repos.getContent({
         owner,
         repo,
         path: "README.md",
@@ -138,16 +120,10 @@ class GitHubClient {
   async getDiffContent(
     owner: string,
     repo: string,
-    pullNumber: number,
-    installationId: string
+    pullNumber: number
   ): Promise<string> {
-    const octokit = await this.getInstallationOctokit(installationId);
-    if (!octokit) {
-      throw new Error(`Failed to get Octokit client for installation ${installationId}`);
-    }
-
     try {
-      const response = await octokit.request(
+      const response = await this.octokit.request(
         "GET /repos/{owner}/{repo}/pulls/{pull_number}",
         {
           owner,
@@ -172,16 +148,10 @@ class GitHubClient {
     owner: string,
     repo: string,
     pullNumber: number,
-    body: string,
-    installationId: string
+    body: string
   ): Promise<IssueComment> {
-    const octokit = await this.getInstallationOctokit(installationId);
-    if (!octokit) {
-      throw new Error(`Failed to get Octokit client for installation ${installationId}`);
-    }
-
     try {
-      const response = await octokit.issues.createComment({
+      const response = await this.octokit.issues.createComment({
         owner,
         repo,
         issue_number: pullNumber,
@@ -199,16 +169,10 @@ class GitHubClient {
     repo: string,
     pullNumber: number,
     body: string,
-    event: "APPROVE" | "REQUEST_CHANGES" | "COMMENT" = "COMMENT",
-    installationId: string
+    event: "APPROVE" | "REQUEST_CHANGES" | "COMMENT" = "COMMENT"
   ): Promise<Review> {
-    const octokit = await this.getInstallationOctokit(installationId);
-    if (!octokit) {
-      throw new Error(`Failed to get Octokit client for installation ${installationId}`);
-    }
-
     try {
-      const response = await octokit.pulls.createReview({
+      const response = await this.octokit.pulls.createReview({
         owner,
         repo,
         pull_number: pullNumber,
@@ -226,16 +190,10 @@ class GitHubClient {
     owner: string,
     repo: string,
     commentId: number,
-    body: string,
-    installationId: string
+    body: string
   ): Promise<IssueComment> {
-    const octokit = await this.getInstallationOctokit(installationId);
-    if (!octokit) {
-      throw new Error(`Failed to get Octokit client for installation ${installationId}`);
-    }
-
     try {
-      const response = await octokit.issues.updateComment({
+      const response = await this.octokit.issues.updateComment({
         owner,
         repo,
         comment_id: commentId,
@@ -252,16 +210,10 @@ class GitHubClient {
     owner: string,
     repo: string,
     pullNumber: number,
-    commentMarker: string = "<!-- README-BOT -->",
-    installationId: string
+    commentMarker: string = "<!-- README-BOT -->"
   ): Promise<IssueComment | null> {
-    const octokit = await this.getInstallationOctokit(installationId);
-    if (!octokit) {
-      throw new Error(`Failed to get Octokit client for installation ${installationId}`);
-    }
-
     try {
-      const response = await octokit.issues.listComments({
+      const response = await this.octokit.issues.listComments({
         owner,
         repo,
         issue_number: pullNumber,
@@ -308,17 +260,11 @@ class GitHubClient {
     repo: string,
     pullNumber: number,
     suggestions: Suggestion[],
-    currentReadme: string,
-    installationId: string,
+    currentReadme: string
   ): Promise<CommitResult | null> {
-    const octokit = await this.getInstallationOctokit(installationId);
-    if (!octokit) {
-      throw new Error(`Failed to get Octokit client for installation ${installationId}`);
-    }
-
     try {
       // Get PR details to get the head branch
-      const pr = await octokit.pulls.get({
+      const pr = await this.octokit.pulls.get({
         owner,
         repo,
         pull_number: pullNumber,
@@ -348,7 +294,7 @@ class GitHubClient {
       // Get current README file details from the head branch
       let readmeFileData: { data: { sha: string } } | null = null;
       try {
-        const response = await octokit.repos.getContent({
+        const response = await this.octokit.repos.getContent({
           owner: headOwner,
           repo: headRepo,
           path: "README.md",
@@ -393,7 +339,7 @@ class GitHubClient {
       }
 
       const result =
-        await octokit.repos.createOrUpdateFileContents(updateData);
+        await this.octokit.repos.createOrUpdateFileContents(updateData);
 
       if (!result.data.commit.html_url) {
         throw new Error("Failed to get commit URL");

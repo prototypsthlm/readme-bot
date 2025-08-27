@@ -104,15 +104,15 @@ async function analyzePR(owner: string, repo: string, pullNumber: number, instal
       throw new Error('ANTHROPIC_API_KEY environment variable is required');
     }
     
-    const github = new GitHubClient();
+    const github = new GitHubClient(installationId);
     const claude = new ClaudeClient();
     
     console.log(`Fetching PR data for ${owner}/${repo}#${pullNumber}...`);
     
     // Fetch PR data step by step
-    const prData = await github.getPullRequestData(owner, repo, pullNumber, installationId);
-    const readme = await github.getCurrentReadme(owner, repo, installationId);
-    const diff = await github.getDiffContent(owner, repo, pullNumber, installationId);
+    const prData = await github.getPullRequestData(owner, repo, pullNumber);
+    const readme = await github.getCurrentReadme(owner, repo);
+    const diff = await github.getDiffContent(owner, repo, pullNumber);
     
     console.log(`Analyzing changes with Claude...`);
     
@@ -138,8 +138,7 @@ async function analyzePR(owner: string, repo: string, pullNumber: number, instal
         repo, 
         pullNumber, 
         analysis.suggestions, 
-        readme,
-        installationId
+        readme
       );
       
       if (commitResult) {
