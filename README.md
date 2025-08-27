@@ -42,8 +42,8 @@ Configure these in your Digital Ocean Functions environment:
 ```bash
 # Required
 ANTHROPIC_API_KEY=sk-ant-your-claude-api-key
-GITHUB_APP_ID=your-github-app-id
-GITHUB_PRIVATE_KEY=your-github-app-private-key
+GH_APP_ID=your-github-app-id
+GH_PRIVATE_KEY=your-github-app-private-key
 
 # Optional  
 WEBHOOK_SECRET=your-webhook-secret
