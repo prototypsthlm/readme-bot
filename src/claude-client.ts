@@ -1,6 +1,37 @@
-const Anthropic = require('@anthropic-ai/sdk');
+import Anthropic from '@anthropic-ai/sdk';
+
+interface AnalysisOptions {
+  repoName?: string;
+  prTitle?: string;
+  prDescription?: string;
+  changedFiles?: string[];
+}
+
+interface Suggestion {
+  type: 'env' | 'dependency' | 'feature' | 'setup' | 'api' | 'architecture';
+  section: string;
+  description: string;
+  priority: 'high' | 'medium' | 'low';
+  content: string;
+}
+
+interface AnalysisResult {
+  needsUpdate: boolean;
+  suggestions: Suggestion[];
+  error?: string;
+}
+
+interface AnalysisContext {
+  repoName: string;
+  prTitle: string;
+  prDescription: string;
+  changedFiles: string[];
+}
 
 class ClaudeClient {
+  private client: Anthropic;
+  private model: string;
+
   constructor() {
     this.client = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY,
@@ -8,7 +39,7 @@ class ClaudeClient {
     this.model = process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514';
   }
 
-  async analyzeChanges(prDiff, currentReadme, options = {}) {
+  async analyzeChanges(prDiff: string, currentReadme: string, options: AnalysisOptions = {}): Promise<AnalysisResult> {
     const {
       repoName = 'Unknown Repository',
       prTitle = '',
@@ -36,14 +67,19 @@ class ClaudeClient {
         ]
       });
 
-      return this.parseResponse(response.content[0].text);
+      const content = response.content[0];
+      if (content.type !== 'text') {
+        throw new Error('Unexpected response type from Claude API');
+      }
+
+      return this.parseResponse(content.text);
     } catch (error) {
       console.error('Error calling Claude API:', error);
-      throw new Error(`Failed to analyze changes: ${error.message}`);
+      throw new Error(`Failed to analyze changes: ${(error as Error).message}`);
     }
   }
 
-  buildAnalysisPrompt(prDiff, currentReadme, context) {
+  private buildAnalysisPrompt(prDiff: string, currentReadme: string, context: AnalysisContext): string {
     return `You are analyzing a pull request to determine if the README.md file needs to be updated.
 
 **Repository:** ${context.repoName}
@@ -86,7 +122,7 @@ If no updates are needed, return {"needsUpdate": false, "suggestions": []}
 Only suggest updates that are clearly warranted by the code changes. Be specific and actionable.`;
   }
 
-  parseResponse(response) {
+  private parseResponse(response: string): AnalysisResult {
     try {
       // Clean up the response to extract JSON
       const jsonMatch = response.match(/\{[\s\S]*\}/);
@@ -114,14 +150,14 @@ Only suggest updates that are clearly warranted by the code changes. Be specific
       return {
         needsUpdate: false,
         suggestions: [],
-        error: `Failed to parse response: ${error.message}`
+        error: `Failed to parse response: ${(error as Error).message}`
       };
     }
   }
 
-  async validateAnalysis(suggestions, currentReadme) {
+  async validateAnalysis(suggestions: Suggestion[], currentReadme: string): Promise<AnalysisResult> {
     if (!suggestions || suggestions.length === 0) {
-      return suggestions;
+      return { needsUpdate: false, suggestions };
     }
 
     const validationPrompt = `Please review these README update suggestions for accuracy and relevance:
@@ -154,7 +190,12 @@ Return the same JSON structure with only valid suggestions.`;
         ]
       });
 
-      return this.parseResponse(response.content[0].text);
+      const content = response.content[0];
+      if (content.type !== 'text') {
+        throw new Error('Unexpected response type from Claude API');
+      }
+
+      return this.parseResponse(content.text);
     } catch (error) {
       console.warn('Validation failed, returning original suggestions:', error);
       return { needsUpdate: true, suggestions };
@@ -162,4 +203,4 @@ Return the same JSON structure with only valid suggestions.`;
   }
 }
 
-module.exports = ClaudeClient;
+export default ClaudeClient;
