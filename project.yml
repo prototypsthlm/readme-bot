@@ -9,6 +9,6 @@ packages:
     functions:
       - name: webhook
         runtime: nodejs:18
-        main: index.ts
+        main: ""
         web: true
-        # buildCommand: npm run build
+        
