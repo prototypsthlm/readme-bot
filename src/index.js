@@ -48,7 +48,7 @@ app.post('/webhook', async (req, res) => {
   }
   
   const payload = JSON.parse(req.body.toString());
-  const { action, pull_request: pr, repository: repo } = payload;
+  const { action, pull_request: pr, repository: repo, installation } = payload;
   
   console.log(`📝 PR event: ${repo.full_name}#${pr.number} - ${action}`);
   
@@ -58,10 +58,15 @@ app.post('/webhook', async (req, res) => {
     return res.status(200).send('PR action ignored');
   }
   
-  console.log(`🚀 Processing PR #${pr.number} in ${repo.full_name} (${action})`);
+  if (!installation || !installation.id) {
+    console.log('❌ No installation ID found in webhook payload');
+    return res.status(400).send('Missing installation ID');
+  }
+  
+  console.log(`🚀 Processing PR #${pr.number} in ${repo.full_name} (${action}) for installation ${installation.id}`);
   
   try {
-    await analyzePR(repo.owner.login, repo.name, pr.number);
+    await analyzePR(repo.owner.login, repo.name, pr.number, installation.id);
     console.log(`✅ Analysis complete for PR #${pr.number}`);
     res.status(200).send('Analysis complete');
   } catch (error) {
@@ -76,7 +81,7 @@ app.get('/health', (req, res) => {
 });
 
 // Core analysis logic extracted from CLI
-async function analyzePR(owner, repo, pullNumber) {
+async function analyzePR(owner, repo, pullNumber, installationId) {
   try {
     // Basic validation
     if (!process.env.ANTHROPIC_API_KEY) {
@@ -90,9 +95,9 @@ async function analyzePR(owner, repo, pullNumber) {
     console.log(`Fetching PR data for ${owner}/${repo}#${pullNumber}...`);
     
     // Fetch PR data step by step
-    const prData = await github.getPullRequestData(owner, repo, pullNumber);
-    const readme = await github.getCurrentReadme(owner, repo);
-    const diff = await github.getDiffContent(owner, repo, pullNumber);
+    const prData = await github.getPullRequestData(owner, repo, pullNumber, installationId);
+    const readme = await github.getCurrentReadme(owner, repo, installationId);
+    const diff = await github.getDiffContent(owner, repo, pullNumber, installationId);
     
     console.log(`Analyzing changes with Claude...`);
     
@@ -118,7 +123,8 @@ async function analyzePR(owner, repo, pullNumber) {
         repo, 
         pullNumber, 
         analysis.suggestions, 
-        readme
+        readme,
+        installationId
       );
       
       if (commitResult) {

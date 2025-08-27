@@ -3,8 +3,8 @@ const { createAppAuth } = require('@octokit/auth-app');
 
 class GitHubClient {
   constructor() {
-    // Will be initialized in init()
-    this.octokit = null;
+    this.appAuth = null;
+    this.installationAuths = new Map(); // Cache installation auths by installationId
   }
 
   async init() {
@@ -12,15 +12,31 @@ class GitHubClient {
       throw new Error('GitHub App configuration is required. Set GH_APP_ID, GH_CLIENT_ID, GH_CLIENT_SECRET, and GH_PRIVATE_KEY_BASE64');
     }
 
-    this.octokit = new Octokit({
-      authStrategy: createAppAuth,
-      auth: {
-        clientId: process.env.GH_CLIENT_ID,
-        clientSecret: process.env.GH_CLIENT_SECRET,
-        appId: process.env.GH_APP_ID,
-        privateKey: this.decodePrivateKey(process.env.GH_PRIVATE_KEY_BASE64),
-      }
+    this.appAuth = createAppAuth({
+      clientId: process.env.GH_CLIENT_ID,
+      clientSecret: process.env.GH_CLIENT_SECRET,
+      appId: process.env.GH_APP_ID,
+      privateKey: this.decodePrivateKey(process.env.GH_PRIVATE_KEY_BASE64),
     });
+  }
+
+  async getInstallationOctokit(installationId) {
+    if (!this.installationAuths.has(installationId)) {
+      const octokit = new Octokit({
+        authStrategy: createAppAuth,
+        auth: {
+          clientId: process.env.GH_CLIENT_ID,
+          clientSecret: process.env.GH_CLIENT_SECRET,
+          appId: process.env.GH_APP_ID,
+          privateKey: this.decodePrivateKey(process.env.GH_PRIVATE_KEY_BASE64),
+          installationId: installationId,
+        }
+      });
+
+      this.installationAuths.set(installationId, octokit);
+    }
+
+    return this.installationAuths.get(installationId);
   }
 
   decodePrivateKey(base64Key) {
@@ -32,12 +48,13 @@ class GitHubClient {
     return !!(process.env.GH_APP_ID && process.env.GH_PRIVATE_KEY_BASE64 && process.env.GH_CLIENT_ID && process.env.GH_CLIENT_SECRET);
   }
 
-  async getPullRequestData(owner, repo, pullNumber) {
+  async getPullRequestData(owner, repo, pullNumber, installationId) {
     try {
+      const octokit = await this.getInstallationOctokit(installationId);
       const [prResponse, filesResponse, commitsResponse] = await Promise.all([
-        this.octokit.pulls.get({ owner, repo, pull_number: pullNumber }),
-        this.octokit.pulls.listFiles({ owner, repo, pull_number: pullNumber }),
-        this.octokit.pulls.listCommits({ owner, repo, pull_number: pullNumber })
+        octokit.pulls.get({ owner, repo, pull_number: pullNumber }),
+        octokit.pulls.listFiles({ owner, repo, pull_number: pullNumber }),
+        octokit.pulls.listCommits({ owner, repo, pull_number: pullNumber })
       ]);
 
       const pr = prResponse.data;
@@ -72,9 +89,10 @@ class GitHubClient {
     }
   }
 
-  async getCurrentReadme(owner, repo, ref = 'main') {
+  async getCurrentReadme(owner, repo, installationId, ref = 'main') {
     try {
-      const response = await this.octokit.repos.getContent({
+      const octokit = await this.getInstallationOctokit(installationId);
+      const response = await octokit.repos.getContent({
         owner,
         repo,
         path: 'README.md',
@@ -94,9 +112,10 @@ class GitHubClient {
     }
   }
 
-  async getDiffContent(owner, repo, pullNumber) {
+  async getDiffContent(owner, repo, pullNumber, installationId) {
     try {
-      const response = await this.octokit.pulls.get({
+      const octokit = await this.getInstallationOctokit(installationId);
+      const response = await octokit.pulls.get({
         owner,
         repo,
         pull_number: pullNumber,
@@ -196,10 +215,11 @@ class GitHubClient {
     throw new Error(`Invalid GitHub repository URL: ${url}`);
   }
 
-  async commitReadmeUpdates(owner, repo, pullNumber, suggestions, currentReadme) {
+  async commitReadmeUpdates(owner, repo, pullNumber, suggestions, currentReadme, installationId) {
     try {
+      const octokit = await this.getInstallationOctokit(installationId);
       // Get PR details to get the head branch
-      const pr = await this.octokit.pulls.get({
+      const pr = await octokit.pulls.get({
         owner,
         repo,
         pull_number: pullNumber
@@ -220,7 +240,7 @@ class GitHubClient {
       // Get current README file details from the head branch
       let readmeFileData;
       try {
-        readmeFileData = await this.octokit.repos.getContent({
+        readmeFileData = await octokit.repos.getContent({
           owner: headOwner,
           repo: headRepo,
           path: 'README.md',
@@ -252,7 +272,7 @@ class GitHubClient {
         updateData.sha = readmeFileData.data.sha;
       }
 
-      const result = await this.octokit.repos.createOrUpdateFileContents(updateData);
+      const result = await octokit.repos.createOrUpdateFileContents(updateData);
       
       return {
         commit: result.data.commit,
