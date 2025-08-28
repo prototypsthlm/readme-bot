@@ -472,7 +472,18 @@ export async function main(event: FunctionEvent, _context: FunctionContext): Pro
         };
       }
 
-      console.log(`💬 Comment created on PR #${issue.number} in ${repo.full_name} by ${comment.user.login}`);
+      // Check if the comment is the specific apply command
+      const commentBody = comment.body.trim();
+      if (commentBody !== '@prototyp-readme-bot apply') {
+        console.log(`ℹ️ Ignoring comment that doesn't match apply command: "${commentBody}"`);
+        return {
+          statusCode: 200,
+          body: 'Comment ignored - not apply command',
+          headers: { 'Content-Type': 'text/plain' }
+        };
+      }
+
+      console.log(`💬 Apply command received on PR #${issue.number} in ${repo.full_name} by ${comment.user.login}`);
       console.log(`🚀 Processing commit for PR #${issue.number} in ${repo.full_name} for installation ${installation.id}`);
       
       await commitReadmeFromAnalysis(repo.owner.login, repo.name, issue.number, installation.id);
