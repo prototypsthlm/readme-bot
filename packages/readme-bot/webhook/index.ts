@@ -2,6 +2,7 @@ import 'dotenv/config';
 // import crypto from 'crypto';
 import ClaudeClient from './claude-client.js';
 import GitHubClient from './github-client.js';
+import type { AnalysisResult, CommitResult } from './types.js';
 
 interface GitHubWebhookPayload {
   action: string;
@@ -57,6 +58,127 @@ interface FunctionResponse {
   );
 } */
 
+// Helper functions for PR comments
+async function createAnalysisComment(
+  github: GitHubClient, 
+  owner: string, 
+  repo: string, 
+  pullNumber: number, 
+  analysis: AnalysisResult, 
+  hasExistingReadme: boolean
+): Promise<void> {
+  try {
+    const commentBody = formatAnalysisComment(analysis, hasExistingReadme);
+    
+    // Check if we already have a comment for this PR
+    const existingComment = await github.findExistingComment(owner, repo, pullNumber, '<!-- README-BOT-ANALYSIS -->');
+    
+    if (existingComment) {
+      await github.updateComment(owner, repo, existingComment.id, commentBody);
+      console.log(`📝 Updated existing analysis comment for PR #${pullNumber}`);
+    } else {
+      await github.createComment(owner, repo, pullNumber, commentBody);
+      console.log(`📝 Created new analysis comment for PR #${pullNumber}`);
+    }
+  } catch (error) {
+    console.warn(`Failed to create/update PR comment: ${(error as Error).message}`);
+  }
+}
+
+/* 
+async function updateAnalysisComment(
+  github: GitHubClient, 
+  owner: string, 
+  repo: string, 
+  pullNumber: number, 
+  analysis: AnalysisResult, 
+  commitResult: CommitResult
+): Promise<void> {
+  try {
+    const existingComment = await github.findExistingComment(owner, repo, pullNumber, '<!-- README-BOT-ANALYSIS -->');
+    if (existingComment) {
+      const updatedBody = formatAnalysisComment(analysis, true, commitResult);
+      await github.updateComment(owner, repo, existingComment.id, updatedBody);
+      console.log(`📝 Updated analysis comment with commit success for PR #${pullNumber}`);
+    }
+  } catch (error) {
+    console.warn(`Failed to update PR comment with success: ${(error as Error).message}`);
+  }
+}
+
+async function updateAnalysisCommentWithError(
+  github: GitHubClient, 
+  owner: string, 
+  repo: string, 
+  pullNumber: number, 
+  analysis: AnalysisResult, 
+  error: Error
+): Promise<void> {
+  try {
+    const existingComment = await github.findExistingComment(owner, repo, pullNumber, '<!-- README-BOT-ANALYSIS -->');
+    if (existingComment) {
+      const updatedBody = formatAnalysisComment(analysis, true, null, error);
+      await github.updateComment(owner, repo, existingComment.id, updatedBody);
+      console.log(`📝 Updated analysis comment with commit error for PR #${pullNumber}`);
+    }
+  } catch (updateError) {
+    console.warn(`Failed to update PR comment with error: ${(updateError as Error).message}`);
+  }
+} */
+
+function formatAnalysisComment(
+  analysis: AnalysisResult, 
+  hasExistingReadme: boolean, 
+  commitResult?: CommitResult | null, 
+  error?: Error
+): string {
+  const marker = '<!-- README-BOT-ANALYSIS -->';
+  const timestamp = new Date().toISOString();
+  
+  console.log(`🔍 Formatting comment - needsUpdate: ${analysis.needsUpdate}, suggestions: ${analysis.suggestions.length}, hasCommitResult: ${!!commitResult}, hasError: ${!!error}`);
+  
+  let comment = `${marker}\n## 🤖 README Analysis Results\n\n`;
+  
+  if (analysis.needsUpdate) {
+    comment += `✅ **Analysis Complete** - README updates recommended\n\n`;
+    
+    if (analysis.suggestions.length > 0) {
+      comment += `### 📝 Suggested Improvements (${analysis.suggestions.length})\n\n`;
+      
+      analysis.suggestions.forEach((suggestion, index) => {
+        comment += `${index + 1}. **${suggestion.type}** - ${suggestion.section}\n`;
+        comment += `   - ${suggestion.description}\n`;
+        comment += `   - Priority: ${suggestion.priority}\n\n`;
+      });
+    }
+    
+    if (commitResult) {
+      comment += `### ✅ Changes Applied\n\n`;
+      comment += `- Successfully committed ${commitResult.suggestions} README improvements\n`;
+      comment += `- [View commit](${commitResult.url})\n\n`;
+    } else if (error) {
+      comment += `### ❌ Commit Failed\n\n`;
+      comment += `- Failed to apply README changes: ${error.message}\n`;
+      comment += `- Changes need to be applied manually\n\n`;
+    } else {
+      comment += `### ⏳ Next Steps\n\n`;
+      comment += `- README updates will be committed automatically\n\n`;
+    }
+  } else {
+    comment += `✅ **Analysis Complete** - No README updates needed\n\n`;
+    comment += `The current README adequately covers the changes in this PR.\n\n`;
+  }
+  
+  if (!hasExistingReadme) {
+    comment += `ℹ️ *No existing README.md found. Consider adding one to document your project.*\n\n`;
+  }
+  
+  comment += `---\n*Analysis performed at ${timestamp}*\n`;
+  comment += `*Powered by [Claude AI](https://claude.ai) • README-Bot v1.0*`;
+  
+  return comment;
+}
+
 // Core analysis logic extracted from CLI
 async function analyzePR(owner: string, repo: string, pullNumber: number, installationId: string): Promise<void> {
   try {
@@ -76,6 +198,13 @@ async function analyzePR(owner: string, repo: string, pullNumber: number, instal
     const diff = await github.getDiffContent(owner, repo, pullNumber);
     
     console.log(`Analyzing changes with Claude...`);
+    console.log(`📊 Analysis Context:
+- Repository: ${owner}/${repo}
+- PR Title: ${prData.title}
+- PR Description: ${prData.body?.substring(0, 100)}...
+- Changed Files: ${prData.changedFiles.length} files: ${prData.changedFiles.join(', ')}
+- README Length: ${readme.length} characters
+- Diff Length: ${diff.length} characters`);
     
     // Analyze with Claude
     const analysis = await claude.analyzeChanges(diff, readme, {
@@ -85,6 +214,18 @@ async function analyzePR(owner: string, repo: string, pullNumber: number, instal
       changedFiles: prData.changedFiles
     });
     
+    console.log(`📋 Analysis Result:
+- Needs Update: ${analysis.needsUpdate}
+- Suggestions Count: ${analysis.suggestions.length}
+- Suggestions: ${JSON.stringify(analysis.suggestions, null, 2)}`);
+    
+    if (analysis.error) {
+      console.warn(`⚠️ Analysis Error: ${analysis.error}`);
+    }
+    
+    // Create PR comment about analysis results
+    await createAnalysisComment(github, owner, repo, pullNumber, analysis, readme.length > 0);
+    
     if (!analysis.needsUpdate) {
       console.log(`✅ README is up to date for PR #${pullNumber}`);
       return;
@@ -93,7 +234,7 @@ async function analyzePR(owner: string, repo: string, pullNumber: number, instal
     console.log(`README needs updates, committing changes...`);
     
     // Auto-commit README updates
-    try {
+    /* try {
       const commitResult = await github.commitReadmeUpdates(
         owner, 
         repo, 
@@ -105,13 +246,19 @@ async function analyzePR(owner: string, repo: string, pullNumber: number, instal
       if (commitResult) {
         console.log(`✅ Committed ${commitResult.suggestions} README updates to PR #${pullNumber}`);
         console.log(`Commit URL: ${commitResult.url}`);
+        
+        // Update comment with commit success
+        await updateAnalysisComment(github, owner, repo, pullNumber, analysis, commitResult);
       } else {
         console.log(`ℹ️ No README changes needed for PR #${pullNumber}`);
       }
     } catch (commitError) {
       console.error(`Failed to commit README updates: ${(commitError as Error).message}`);
       console.log(`📝 Suggestions were: ${JSON.stringify(analysis.suggestions, null, 2)}`);
-    }
+      
+      // Update comment with commit failure
+      await updateAnalysisCommentWithError(github, owner, repo, pullNumber, analysis, commitError as Error);
+    } */
     
   } catch (error) {
     console.error(`Analysis failed: ${(error as Error).message}`);

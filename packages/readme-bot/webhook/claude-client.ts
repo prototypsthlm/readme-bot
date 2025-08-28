@@ -52,46 +52,58 @@ class ClaudeClient {
   }
 
   private buildAnalysisPrompt(prDiff: string, currentReadme: string, context: AnalysisOptions): string {
-    return `You are analyzing a pull request to determine if the README.md file needs to be updated.
+    return `You are analyzing a COMPLETE pull request diff to determine if the README.md file needs to be updated.
+
+IMPORTANT: This diff contains ALL changes from the entire pull request, not just a single commit. Analyze the full scope of changes.
 
 **Repository:** ${context.repoName}
 **PR Title:** ${context.prTitle}
 **PR Description:** ${context.prDescription}
-**Changed Files:** ${context.changedFiles?.join(', ') || 'None'}
+**Changed Files:** ${context.changedFiles?.join(', ') || 'None'} (${context.changedFiles?.length || 0} files total)
 
-**Current README.md:**
+**Current README.md (${currentReadme.length} characters):**
 \`\`\`markdown
 ${currentReadme}
 \`\`\`
 
-**Pull Request Changes:**
+**Complete Pull Request Diff (${prDiff.length} characters):**
 \`\`\`diff
 ${prDiff}
 \`\`\`
 
-Please analyze these changes and determine if the README needs updates. Look for:
+ANALYSIS INSTRUCTIONS:
+Thoroughly analyze the ENTIRE pull request diff above. Look for ANY changes across ALL commits and files that might affect the README, including:
 
-1. **Environment Variables:** New environment variables added to code that should be documented
-2. **Dependencies:** Package.json changes, new libraries, version updates
+1. **Environment Variables:** New environment variables in any file that should be documented
+2. **Dependencies:** Package.json changes, new libraries, version updates across the PR
 3. **Configuration:** New config files, Docker changes, deployment updates
-4. **Features:** New functionality that should be described
-5. **Setup Instructions:** Changes that affect installation or setup
-6. **API Changes:** New endpoints, modified interfaces
-7. **Architecture:** Structural changes that impact the project description
+4. **Features:** New functionality, endpoints, components, or capabilities added
+5. **Setup Instructions:** Changes that affect installation, build, or setup process
+6. **API Changes:** New endpoints, modified interfaces, changed parameters
+7. **Architecture:** Structural changes, new modules, refactoring that impacts project description
+8. **File Structure:** New important files or directories that should be documented
+9. **Scripts:** New npm/yarn scripts or build processes
+10. **Breaking Changes:** Any changes that might affect how users interact with the project
+
+EVALUATION CRITERIA:
+- Consider if the current README already covers what was changed
+- Only suggest updates for changes that genuinely impact users or contributors
+- Be conservative but thorough - if there's clear evidence of missing documentation, flag it
+- Look at the magnitude and scope of changes across the ENTIRE PR
 
 **Response Format:**
 Respond with a JSON object containing:
-- "needsUpdate": boolean indicating if README needs changes
+- "needsUpdate": boolean indicating if README needs changes based on COMPLETE PR analysis
 - "suggestions": array of specific suggestions with:
-  - "type": category of change (env, dependency, feature, setup, api, architecture)
+  - "type": category of change (env, dependency, feature, setup, api, architecture, etc.)
   - "section": README section that needs updating
-  - "description": what needs to be changed
-  - "priority": high/medium/low
+  - "description": what needs to be changed and why
+  - "priority": high/medium/low based on impact to users
   - "content": suggested content to add/modify
 
 If no updates are needed, return {"needsUpdate": false, "suggestions": []}
 
-Only suggest updates that are clearly warranted by the code changes. Be specific and actionable.`;
+Be thorough but only suggest updates that are clearly warranted by the code changes in this COMPLETE PR diff.`;
   }
 
   private parseResponse(response: string): AnalysisResult {
