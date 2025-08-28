@@ -122,9 +122,9 @@ async function analyzePR(owner: string, repo: string, pullNumber: number, instal
 // Main Digital Ocean Function handler
 export async function main(event: FunctionEvent, _context: FunctionContext): Promise<FunctionResponse> {
   try {
-    // const signature = event.http.headers['X-Hub-Signature-256'];
-    const eventType = event.http.headers['X-Github-Event'];
-    const delivery = event.http.headers['X-Github-Delivery'];
+    // const signature = event.http.headers['x-hub-signature-256'];
+    const eventType = event.http.headers['x-github-event'];
+    const delivery = event.http.headers['x-github-delivery'];
     
     console.log(`🔔 Webhook received: event=${eventType}, delivery=${delivery}`);
     
