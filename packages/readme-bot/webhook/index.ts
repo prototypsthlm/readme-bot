@@ -6,10 +6,22 @@ import type { AnalysisResult, CommitResult } from './types.js';
 
 interface GitHubWebhookPayload {
   action: string;
-  pull_request: {
+  pull_request?: {
     number: number;
     title: string;
     body: string | null;
+  };
+  issue?: {
+    number: number;
+    pull_request?: {
+      url: string;
+    };
+  };
+  comment?: {
+    body: string;
+    user: {
+      login: string;
+    };
   };
   repository: {
     full_name: string;
@@ -179,6 +191,83 @@ function formatAnalysisComment(
   return comment;
 }
 
+// Function to commit README updates from previous analysis
+async function commitReadmeFromAnalysis(owner: string, repo: string, pullNumber: number, installationId: string): Promise<void> {
+  try {
+    if (!process.env['ANTHROPIC_API_KEY']) {
+      throw new Error('ANTHROPIC_API_KEY environment variable is required');
+    }
+    
+    const github = new GitHubClient(installationId);
+    const claude = new ClaudeClient();
+    
+    console.log(`Fetching PR data for commit: ${owner}/${repo}#${pullNumber}...`);
+    
+    // Fetch PR data and current analysis
+    const prData = await github.getPullRequestData(owner, repo, pullNumber);
+    const readme = await github.getCurrentReadme(owner, repo);
+    const diff = await github.getDiffContent(owner, repo, pullNumber);
+    
+    console.log(`Re-analyzing changes for commit with Claude...`);
+    
+    // Re-analyze to get latest suggestions
+    const analysis = await claude.analyzeChanges(diff, readme, {
+      repoName: `${owner}/${repo}`,
+      prTitle: prData.title,
+      prDescription: prData.body,
+      changedFiles: prData.changedFiles
+    });
+    
+    if (!analysis.needsUpdate) {
+      console.log(`✅ No README updates needed for PR #${pullNumber}`);
+      return;
+    }
+    
+    console.log(`📝 Committing README updates for PR #${pullNumber}...`);
+    
+    // Commit README updates
+    try {
+      const commitResult = await github.commitReadmeUpdates(
+        owner, 
+        repo, 
+        pullNumber, 
+        analysis.suggestions, 
+        readme
+      );
+      
+      if (commitResult) {
+        console.log(`✅ Committed ${commitResult.suggestions} README updates to PR #${pullNumber}`);
+        console.log(`Commit URL: ${commitResult.url}`);
+        
+        // Update existing comment with commit success
+        const existingComment = await github.findExistingComment(owner, repo, pullNumber, '<!-- README-BOT-ANALYSIS -->');
+        if (existingComment) {
+          const updatedBody = formatAnalysisComment(analysis, readme.length > 0, commitResult);
+          await github.updateComment(owner, repo, existingComment.id, updatedBody);
+          console.log(`📝 Updated analysis comment with commit success for PR #${pullNumber}`);
+        }
+      } else {
+        console.log(`ℹ️ No README changes needed for PR #${pullNumber}`);
+      }
+    } catch (commitError) {
+      console.error(`Failed to commit README updates: ${(commitError as Error).message}`);
+      
+      // Update comment with commit failure
+      const existingComment = await github.findExistingComment(owner, repo, pullNumber, '<!-- README-BOT-ANALYSIS -->');
+      if (existingComment) {
+        const updatedBody = formatAnalysisComment(analysis, readme.length > 0, null, commitError as Error);
+        await github.updateComment(owner, repo, existingComment.id, updatedBody);
+        console.log(`📝 Updated analysis comment with commit error for PR #${pullNumber}`);
+      }
+      throw commitError;
+    }
+    
+  } catch (error) {
+    console.error(`Commit from analysis failed: ${(error as Error).message}`);
+    throw error;
+  }
+}
+
 // Core analysis logic extracted from CLI
 async function analyzePR(owner: string, repo: string, pullNumber: number, installationId: string): Promise<void> {
   try {
@@ -311,8 +400,8 @@ export async function main(event: FunctionEvent, _context: FunctionContext): Pro
       };
     } */
     
-    // Only handle pull request events
-    if (eventType !== 'pull_request') {
+    // Handle pull request and issue comment events
+    if (eventType !== 'pull_request' && eventType !== 'issue_comment') {
       console.log(`ℹ️ Ignoring event type: ${eventType}`);
       return {
         statusCode: 200,
@@ -322,24 +411,73 @@ export async function main(event: FunctionEvent, _context: FunctionContext): Pro
     }
     
     const payload: GitHubWebhookPayload = payloadData as GitHubWebhookPayload;
-    const { action, pull_request: pr, repository: repo, installation } = payload;
+    const { action, repository: repo, installation } = payload;
 
-    console.log(`📝 PR event: ${repo.full_name}#${pr.number} - ${action}`);
-    
-    // Only handle opened, synchronize, and reopened PR events
-    if (!['opened', 'synchronize', 'reopened'].includes(action)) {
-      console.log(`ℹ️ Ignoring PR action: ${action}`);
-      return {
-        statusCode: 200,
-        body: 'PR action ignored',
-        headers: { 'Content-Type': 'text/plain' }
-      };
+    if (eventType === 'pull_request') {
+      const pr = payload.pull_request;
+      if (!pr) {
+        return {
+          statusCode: 400,
+          body: 'Invalid pull request payload',
+          headers: { 'Content-Type': 'text/plain' }
+        };
+      }
+
+      console.log(`📝 PR event: ${repo.full_name}#${pr.number} - ${action}`);
+      
+      // Only handle opened, synchronize, and reopened PR events
+      if (!['opened', 'synchronize', 'reopened'].includes(action)) {
+        console.log(`ℹ️ Ignoring PR action: ${action}`);
+        return {
+          statusCode: 200,
+          body: 'PR action ignored',
+          headers: { 'Content-Type': 'text/plain' }
+        };
+      }
+      
+      console.log(`🚀 Processing PR #${pr.number} in ${repo.full_name} (${action}) for installation ${installation.id}`);
+      
+      await analyzePR(repo.owner.login, repo.name, pr.number, installation.id);
+      console.log(`✅ Analysis complete for PR #${pr.number}`);
+      
+    } else if (eventType === 'issue_comment') {
+      const issue = payload.issue;
+      const comment = payload.comment;
+      
+      if (!issue || !comment) {
+        return {
+          statusCode: 400,
+          body: 'Invalid issue comment payload',
+          headers: { 'Content-Type': 'text/plain' }
+        };
+      }
+
+      // Only handle created comments
+      if (action !== 'created') {
+        console.log(`ℹ️ Ignoring comment action: ${action}`);
+        return {
+          statusCode: 200,
+          body: 'Comment action ignored',
+          headers: { 'Content-Type': 'text/plain' }
+        };
+      }
+
+      // Only handle comments on pull requests
+      if (!issue.pull_request) {
+        console.log(`ℹ️ Ignoring comment on non-PR issue: ${issue.number}`);
+        return {
+          statusCode: 200,
+          body: 'Non-PR comment ignored',
+          headers: { 'Content-Type': 'text/plain' }
+        };
+      }
+
+      console.log(`💬 Comment created on PR #${issue.number} in ${repo.full_name} by ${comment.user.login}`);
+      console.log(`🚀 Processing commit for PR #${issue.number} in ${repo.full_name} for installation ${installation.id}`);
+      
+      await commitReadmeFromAnalysis(repo.owner.login, repo.name, issue.number, installation.id);
+      console.log(`✅ Commit complete for PR #${issue.number}`);
     }
-    
-    console.log(`🚀 Processing PR #${pr.number} in ${repo.full_name} (${action}) for installation ${installation.id}`);
-    
-    await analyzePR(repo.owner.login, repo.name, pr.number, installation.id);
-    console.log(`✅ Analysis complete for PR #${pr.number}`);
     
     return {
       statusCode: 200,
