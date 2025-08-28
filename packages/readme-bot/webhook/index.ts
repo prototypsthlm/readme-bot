@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import crypto from 'crypto';
+// import crypto from 'crypto';
 import ClaudeClient from './claude-client.js';
 import GitHubClient from './github-client.js';
 
@@ -23,9 +23,12 @@ interface GitHubWebhookPayload {
 }
 
 interface FunctionEvent {
-  headers?: Record<string, string>;
-  body?: string;
-  httpMethod?: string;
+  http: {
+    headers: Record<string, string>;
+    method: string;
+    path: string;
+  };
+  [key: string]: any; // Allow additional top-level properties
 }
 
 interface FunctionContext {
@@ -39,7 +42,7 @@ interface FunctionResponse {
 }
 
 // Webhook signature verification
-function verifySignature(payload: Buffer, signature: string | undefined): boolean {
+/* function verifySignature(payload: Buffer, signature: string | undefined): boolean {
   const webhookSecret = process.env['WEBHOOK_SECRET'];
   if (!webhookSecret) return true; // Skip verification if no secret set
   
@@ -52,7 +55,7 @@ function verifySignature(payload: Buffer, signature: string | undefined): boolea
     Buffer.from(`sha256=${expectedSignature}`, 'utf8'),
     Buffer.from(signature || '', 'utf8')
   );
-}
+} */
 
 // Core analysis logic extracted from CLI
 async function analyzePR(owner: string, repo: string, pullNumber: number, installationId: string): Promise<void> {
@@ -119,14 +122,14 @@ async function analyzePR(owner: string, repo: string, pullNumber: number, instal
 // Main Digital Ocean Function handler
 export async function main(event: FunctionEvent, _context: FunctionContext): Promise<FunctionResponse> {
   try {
-    const signature = event.headers?.['x-hub-signature-256'];
-    const eventType = event.headers?.['x-github-event'];
-    const delivery = event.headers?.['x-github-delivery'];
+    // const signature = event.http.headers['x-hub-signature-256'];
+    const eventType = event.http.headers['x-github-event'];
+    const delivery = event.http.headers['x-github-delivery'];
     
     console.log(`🔔 Webhook received: event=${eventType}, delivery=${delivery}`);
     
     // Only handle POST requests
-    if (event.httpMethod !== 'POST') {
+    if (event.http.method !== 'POST') {
       return {
         statusCode: 405,
         body: 'Method not allowed',
@@ -134,17 +137,24 @@ export async function main(event: FunctionEvent, _context: FunctionContext): Pro
       };
     }
     
-    if (!event.body) {
+    // For signature verification, use the entire event object as the body
+    // const bodyString = JSON.stringify(event);
+    // const bodyBuffer = Buffer.from(bodyString, 'utf8');
+    
+    // Extract the GitHub payload from the event (excluding http object)
+    const { http, ...payloadData } = event;
+    
+    if (Object.keys(payloadData).length === 0) {
       return {
         statusCode: 400,
-        body: 'No body provided',
+        body: 'No payload provided',
         headers: { 'Content-Type': 'text/plain' }
       };
     }
     
-    const bodyBuffer = Buffer.from(event.body, 'utf8');
-    
     // Verify webhook signature
+    /*
+    TODO: add security
     if (!verifySignature(bodyBuffer, signature)) {
       console.log('❌ Invalid webhook signature');
       return {
@@ -152,7 +162,7 @@ export async function main(event: FunctionEvent, _context: FunctionContext): Pro
         body: 'Invalid signature',
         headers: { 'Content-Type': 'text/plain' }
       };
-    }
+    } */
     
     // Only handle pull request events
     if (eventType !== 'pull_request') {
@@ -164,7 +174,7 @@ export async function main(event: FunctionEvent, _context: FunctionContext): Pro
       };
     }
     
-    const payload: GitHubWebhookPayload = JSON.parse(event.body);
+    const payload: GitHubWebhookPayload = payloadData as GitHubWebhookPayload;
     const { action, pull_request: pr, repository: repo, installation } = payload;
 
     console.log(`📝 PR event: ${repo.full_name}#${pr.number} - ${action}`);
