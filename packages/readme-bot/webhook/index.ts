@@ -179,25 +179,13 @@ async function commitReadmeFromAnalysis(owner: string, repo: string, pullNumber:
     
     // Commit README updates
     try {
-      const commitResult = await github.commitReadmeUpdates(
+      await github.commitReadmeUpdates(
         owner, 
         repo, 
         pullNumber, 
         analysis.suggestions, 
         readme
       );
-      
-      if (commitResult) {
-        console.log(`✅ Committed ${commitResult.suggestions} README updates to PR #${pullNumber}`);
-        console.log(`Commit URL: ${commitResult.url}`);
-        
-        // Create new comment with commit success
-        const successBody = formatAnalysisComment(analysis, readme.length > 0, commitResult);
-        await github.createComment(owner, repo, pullNumber, successBody);
-        console.log(`📝 Created new comment with commit success for PR #${pullNumber}`);
-      } else {
-        console.log(`ℹ️ No README changes needed for PR #${pullNumber}`);
-      }
     } catch (commitError) {
       console.error(`Failed to commit README updates: ${(commitError as Error).message}`);
       
