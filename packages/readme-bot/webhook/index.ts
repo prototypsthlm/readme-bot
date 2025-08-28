@@ -82,61 +82,13 @@ async function createAnalysisComment(
   try {
     const commentBody = formatAnalysisComment(analysis, hasExistingReadme);
     
-    // Check if we already have a comment for this PR
-    const existingComment = await github.findExistingComment(owner, repo, pullNumber, '<!-- README-BOT-ANALYSIS -->');
-    
-    if (existingComment) {
-      await github.updateComment(owner, repo, existingComment.id, commentBody);
-      console.log(`📝 Updated existing analysis comment for PR #${pullNumber}`);
-    } else {
-      await github.createComment(owner, repo, pullNumber, commentBody);
-      console.log(`📝 Created new analysis comment for PR #${pullNumber}`);
-    }
+    await github.createComment(owner, repo, pullNumber, commentBody);
+    console.log(`📝 Created analysis comment for PR #${pullNumber}`);
   } catch (error) {
-    console.warn(`Failed to create/update PR comment: ${(error as Error).message}`);
+    console.warn(`Failed to create PR comment: ${(error as Error).message}`);
   }
 }
 
-/* 
-async function updateAnalysisComment(
-  github: GitHubClient, 
-  owner: string, 
-  repo: string, 
-  pullNumber: number, 
-  analysis: AnalysisResult, 
-  commitResult: CommitResult
-): Promise<void> {
-  try {
-    const existingComment = await github.findExistingComment(owner, repo, pullNumber, '<!-- README-BOT-ANALYSIS -->');
-    if (existingComment) {
-      const updatedBody = formatAnalysisComment(analysis, true, commitResult);
-      await github.updateComment(owner, repo, existingComment.id, updatedBody);
-      console.log(`📝 Updated analysis comment with commit success for PR #${pullNumber}`);
-    }
-  } catch (error) {
-    console.warn(`Failed to update PR comment with success: ${(error as Error).message}`);
-  }
-}
-
-async function updateAnalysisCommentWithError(
-  github: GitHubClient, 
-  owner: string, 
-  repo: string, 
-  pullNumber: number, 
-  analysis: AnalysisResult, 
-  error: Error
-): Promise<void> {
-  try {
-    const existingComment = await github.findExistingComment(owner, repo, pullNumber, '<!-- README-BOT-ANALYSIS -->');
-    if (existingComment) {
-      const updatedBody = formatAnalysisComment(analysis, true, null, error);
-      await github.updateComment(owner, repo, existingComment.id, updatedBody);
-      console.log(`📝 Updated analysis comment with commit error for PR #${pullNumber}`);
-    }
-  } catch (updateError) {
-    console.warn(`Failed to update PR comment with error: ${(updateError as Error).message}`);
-  }
-} */
 
 function formatAnalysisComment(
   analysis: AnalysisResult, 
@@ -239,26 +191,20 @@ async function commitReadmeFromAnalysis(owner: string, repo: string, pullNumber:
         console.log(`✅ Committed ${commitResult.suggestions} README updates to PR #${pullNumber}`);
         console.log(`Commit URL: ${commitResult.url}`);
         
-        // Update existing comment with commit success
-        const existingComment = await github.findExistingComment(owner, repo, pullNumber, '<!-- README-BOT-ANALYSIS -->');
-        if (existingComment) {
-          const updatedBody = formatAnalysisComment(analysis, readme.length > 0, commitResult);
-          await github.updateComment(owner, repo, existingComment.id, updatedBody);
-          console.log(`📝 Updated analysis comment with commit success for PR #${pullNumber}`);
-        }
+        // Create new comment with commit success
+        const successBody = formatAnalysisComment(analysis, readme.length > 0, commitResult);
+        await github.createComment(owner, repo, pullNumber, successBody);
+        console.log(`📝 Created new comment with commit success for PR #${pullNumber}`);
       } else {
         console.log(`ℹ️ No README changes needed for PR #${pullNumber}`);
       }
     } catch (commitError) {
       console.error(`Failed to commit README updates: ${(commitError as Error).message}`);
       
-      // Update comment with commit failure
-      const existingComment = await github.findExistingComment(owner, repo, pullNumber, '<!-- README-BOT-ANALYSIS -->');
-      if (existingComment) {
-        const updatedBody = formatAnalysisComment(analysis, readme.length > 0, null, commitError as Error);
-        await github.updateComment(owner, repo, existingComment.id, updatedBody);
-        console.log(`📝 Updated analysis comment with commit error for PR #${pullNumber}`);
-      }
+      // Create new comment with commit failure
+      const errorBody = formatAnalysisComment(analysis, readme.length > 0, null, commitError as Error);
+      await github.createComment(owner, repo, pullNumber, errorBody);
+      console.log(`📝 Created new comment with commit error for PR #${pullNumber}`);
       throw commitError;
     }
     
