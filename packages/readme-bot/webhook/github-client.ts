@@ -15,7 +15,7 @@ class GitHubClient {
 
   constructor(installationId: string) {
     if (!this.isGitHubAppConfigured()) {
-      throw new Error('GitHub App configuration is required. Set GH_APP_ID, GH_CLIENT_ID, GH_CLIENT_SECRET, and GH_PRIVATE_KEY_BASE64');
+      throw new Error('GitHub App configuration is required. Set GH_APP_ID, GH_PRIVATE_KEY_BASE64');
     }
     
     if (!installationId) {
