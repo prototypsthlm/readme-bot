@@ -1,5 +1,5 @@
 import 'dotenv/config';
-// import crypto from 'crypto';
+import { Webhooks } from '@octokit/webhooks';
 import ClaudeClient from './claude-client.js';
 import GitHubClient from './github-client.js';
 import type { AnalysisResult, CommitResult } from './types.js';
@@ -40,6 +40,9 @@ interface FunctionEvent {
     headers: Record<string, string>;
     method: string;
     path: string;
+    body?: string; // Raw body for web: raw functions
+    queryString?: string; // Raw query string for web: raw functions
+    isBase64Encoded?: boolean; // Base64 encoding flag for binary data
   };
   [key: string]: any; // Allow additional top-level properties
 }
@@ -54,21 +57,22 @@ interface FunctionResponse {
   headers?: Record<string, string>;
 }
 
-// Webhook signature verification
-/* function verifySignature(payload: Buffer, signature: string | undefined): boolean {
+// Initialize Octokit Webhooks for signature verification
+const webhooks = new Webhooks({
+  secret: process.env['WEBHOOK_SECRET'] || '',
+});
+
+async function verifyWebhookSignature(payload: string, signature: string | undefined): Promise<boolean> {
   const webhookSecret = process.env['WEBHOOK_SECRET'];
   if (!webhookSecret) return true; // Skip verification if no secret set
   
-  const expectedSignature = crypto
-    .createHmac('sha256', webhookSecret)
-    .update(payload)
-    .digest('hex');
-  
-  return crypto.timingSafeEqual(
-    Buffer.from(`sha256=${expectedSignature}`, 'utf8'),
-    Buffer.from(signature || '', 'utf8')
-  );
-} */
+  try {
+    return await webhooks.verify(payload, signature || '');
+  } catch (error) {
+    console.error('Webhook signature verification failed:', (error as Error).message);
+    return false;
+  }
+} 
 
 // Helper functions for PR comments
 async function createAnalysisComment(
@@ -292,7 +296,7 @@ async function analyzePR(owner: string, repo: string, pullNumber: number, instal
 // Main Digital Ocean Function handler
 export async function main(event: FunctionEvent, _context: FunctionContext): Promise<FunctionResponse> {
   try {
-    // const signature = event.http.headers['x-hub-signature-256'];
+    const signature = event.http.headers['x-hub-signature-256'];
     const eventType = event.http.headers['x-github-event'];
     const delivery = event.http.headers['x-github-delivery'];
     
@@ -306,33 +310,39 @@ export async function main(event: FunctionEvent, _context: FunctionContext): Pro
         headers: { 'Content-Type': 'text/plain' }
       };
     }
+
+    // Use the raw body for signature verification (requires web: raw in project.yml)
+    const rawBody = event.http.body;
     
-    // For signature verification, use the entire event object as the body
-    // const bodyString = JSON.stringify(event);
-    // const bodyBuffer = Buffer.from(bodyString, 'utf8');
-    
-    // Extract the GitHub payload from the event (excluding http object)
-    const { http, ...payloadData } = event;
-    
-    if (Object.keys(payloadData).length === 0) {
+    if (!rawBody) {
       return {
         statusCode: 400,
-        body: 'No payload provided',
+        body: 'No body provided - make sure web: raw is set in project.yml',
         headers: { 'Content-Type': 'text/plain' }
       };
     }
     
-    // Verify webhook signature
-    /*
-    TODO: add security
-    if (!verifySignature(bodyBuffer, signature)) {
+    // Verify webhook signature using Octokit with raw body
+    if (!(await verifyWebhookSignature(rawBody, signature))) {
       console.log('❌ Invalid webhook signature');
       return {
         statusCode: 401,
         body: 'Invalid signature',
         headers: { 'Content-Type': 'text/plain' }
       };
-    } */
+    }
+    
+    // Parse the payload from the raw body
+    let payload: GitHubWebhookPayload;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch (error) {
+      return {
+        statusCode: 400,
+        body: 'Invalid JSON payload',
+        headers: { 'Content-Type': 'text/plain' }
+      };
+    }
     
     // Handle pull request and issue comment events
     if (eventType !== 'pull_request' && eventType !== 'issue_comment') {
@@ -343,8 +353,6 @@ export async function main(event: FunctionEvent, _context: FunctionContext): Pro
         headers: { 'Content-Type': 'text/plain' }
       };
     }
-    
-    const payload: GitHubWebhookPayload = payloadData as GitHubWebhookPayload;
     const { action, repository: repo, installation } = payload;
 
     if (eventType === 'pull_request') {
