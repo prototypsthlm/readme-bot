@@ -130,7 +130,7 @@ function formatAnalysisComment(
       comment += `- Changes need to be applied manually\n\n`;
     } else {
       comment += `### ⏳ Next Steps\n\n`;
-      comment += `- README updates will be committed automatically\n\n`;
+      comment += `- To commit README updates add a comment with the following command: @prototyp-readme-bot apply\n\n`;
     }
   } else {
     comment += `✅ **Analysis Complete** - No README updates needed\n\n`;
